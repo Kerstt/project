@@ -7,8 +7,18 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'admin') {
     exit();
 }
 
-// Fetch appointments
-$sql = "SELECT * FROM appointments";
+// Updated query with proper joins and column names
+$sql = "SELECT a.*, 
+        u.first_name, u.last_name,
+        v.make, v.model,
+        s.name as service_name,
+        t.first_name as tech_first_name, t.last_name as tech_last_name
+        FROM appointments a
+        JOIN users u ON a.user_id = u.user_id
+        JOIN vehicles v ON a.vehicle_id = v.vehicle_id
+        JOIN services s ON a.service_id = s.service_id
+        LEFT JOIN users t ON a.technician_id = t.user_id
+        ORDER BY a.appointment_date DESC";
 $result = $conn->query($sql);
 ?>
 
@@ -34,43 +44,46 @@ $result = $conn->query($sql);
             </div>
         </div>
     </nav>
+
     <div class="container mx-auto p-4">
         <h1 class="text-2xl font-bold mb-4">Manage Appointments</h1>
-        <table class="min-w-full bg-white">
-            <thead>
-                <tr>
-                    <th class="py-2 px-4 border-b">ID</th>
-                    <th class="py-2 px-4 border-b">Customer</th>
-                    <th class="py-2 px-4 border-b">Vehicle</th>
-                    <th class="py-2 px-4 border-b">Service</th>
-                    <th class="py-2 px-4 border-b">Date</th>
-                    <th class="py-2 px-4 border-b">Status</th>
-                    <th class="py-2 px-4 border-b">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php
-                if ($result->num_rows > 0) {
-                    while($row = $result->fetch_assoc()) {
-                        echo "<tr>
-                                <td class='py-2 px-4 border-b'>{$row['appointment_id']}</td>
-                                <td class='py-2 px-4 border-b'>{$row['customer_id']}</td>
-                                <td class='py-2 px-4 border-b'>{$row['vehicle_id']}</td>
-                                <td class='py-2 px-4 border-b'>{$row['service_id']}</td>
-                                <td class='py-2 px-4 border-b'>{$row['appointment_date']}</td>
-                                <td class='py-2 px-4 border-b'>{$row['status']}</td>
-                                <td class='py-2 px-4 border-b'>
-                                    <a href='update_appointment_status.php?id={$row['appointment_id']}' class='bg-blue-500 text-white py-1 px-2 rounded'>Update Status</a>
-                                    <a href='assign_technician.php?id={$row['appointment_id']}' class='bg-green-500 text-white py-1 px-2 rounded'>Assign Technician</a>
-                                </td>
-                              </tr>";
-                    }
-                } else {
-                    echo "<tr><td colspan='7' class='py-2 px-4 border-b text-center'>No appointments found</td></tr>";
-                }
-                ?>
-            </tbody>
-        </table>
+        <div class="bg-white rounded-lg shadow p-4">
+            <table class="min-w-full">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-2">Customer</th>
+                        <th class="px-4 py-2">Vehicle</th>
+                        <th class="px-4 py-2">Service</th>
+                        <th class="px-4 py-2">Date</th>
+                        <th class="px-4 py-2">Technician</th>
+                        <th class="px-4 py-2">Status</th>
+                        <th class="px-4 py-2">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php while($row = $result->fetch_assoc()): ?>
+                        <tr>
+                            <td class="px-4 py-2">
+                                <?php echo htmlspecialchars($row['first_name'] . ' ' . $row['last_name']); ?>
+                            </td>
+                            <td class="px-4 py-2">
+                                <?php echo htmlspecialchars($row['make'] . ' ' . $row['model']); ?>
+                            </td>
+                            <td class="px-4 py-2"><?php echo htmlspecialchars($row['service_name']); ?></td>
+                            <td class="px-4 py-2"><?php echo date('M d, Y', strtotime($row['appointment_date'])); ?></td>
+                            <td class="px-4 py-2">
+                                <?php echo $row['tech_first_name'] ? htmlspecialchars($row['tech_first_name'] . ' ' . $row['tech_last_name']) : 'Not assigned'; ?>
+                            </td>
+                            <td class="px-4 py-2"><?php echo htmlspecialchars($row['status']); ?></td>
+                            <td class="px-4 py-2">
+                                <a href="edit_appointment.php?id=<?php echo $row['appointment_id']; ?>" 
+                                   class="text-blue-600 hover:text-blue-800">Edit</a>
+                            </td>
+                        </tr>
+                    <?php endwhile; ?>
+                </tbody>
+            </table>
+        </div>
     </div>
 </body>
 </html>

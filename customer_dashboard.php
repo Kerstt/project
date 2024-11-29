@@ -9,10 +9,21 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'customer') {
 
 $user_id = $_SESSION['user_id'];
 
-// Fetch upcoming appointments
-$sql = "SELECT a.*, s.name as service_name, s.price 
+// Fetch user details
+$user_sql = "SELECT * FROM users WHERE user_id = ?";
+$stmt = $conn->prepare($user_sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$user_data = $stmt->get_result()->fetch_assoc();
+
+// Fetch upcoming appointments with more details
+$sql = "SELECT a.*, s.name as service_name, s.price,
+               v.make, v.model, v.year,
+               u.first_name as tech_first_name, u.last_name as tech_last_name
         FROM appointments a 
         JOIN services s ON a.service_id = s.service_id 
+        JOIN vehicles v ON a.vehicle_id = v.vehicle_id
+        LEFT JOIN users u ON a.technician_id = u.user_id
         WHERE a.user_id = ? AND a.appointment_date >= CURDATE() 
         ORDER BY a.appointment_date ASC";
 $stmt = $conn->prepare($sql);
@@ -27,30 +38,28 @@ $stmt->bind_param("i", $user_id);
 $stmt->execute();
 $result_vehicles = $stmt->get_result();
 
-// Fetch service history
-$sql_history = "SELECT a.*, s.name as service_name, s.price 
-                FROM appointments a 
-                JOIN services s ON a.service_id = s.service_id 
-                WHERE a.user_id = ? AND a.appointment_date < CURDATE() 
-                ORDER BY a.appointment_date DESC 
-                LIMIT 5";
-$stmt = $conn->prepare($sql_history);
+// Get statistics
+$stats_sql = "SELECT 
+    COUNT(DISTINCT v.vehicle_id) as total_vehicles,
+    COUNT(DISTINCT a.appointment_id) as total_appointments,
+    SUM(CASE WHEN a.status = 'completed' THEN 1 ELSE 0 END) as completed_services
+    FROM vehicles v
+    LEFT JOIN appointments a ON v.user_id = a.user_id
+    WHERE v.user_id = ?";
+$stmt = $conn->prepare($stats_sql);
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
-$result_history = $stmt->get_result();
-
-// Count total appointments
-$total_appointments = $result_appointments->num_rows;
+$stats = $stmt->get_result()->fetch_assoc();
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Customer Dashboard - AutoBots</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-50">
     <!-- Navigation -->
@@ -59,14 +68,18 @@ $total_appointments = $result_appointments->num_rows;
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
                     <a href="index.php" class="flex items-center space-x-2">
-                        <i class="fas fa-car text-blue-600 text-2xl"></i>
-                        <span class="text-xl font-bold">AutoBots</span>
+                        <img src="https://cdn-icons-png.flaticon.com/512/1785/1785210.png" alt="AutoBots Logo" class="h-8 w-8">
+                        <span class="text-xl font-bold text-gray-800">AutoBots</span>
                     </a>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <span class="text-gray-600">Welcome, <?php echo htmlspecialchars($_SESSION['name']); ?></span>
+                    <a href="profile.php" class="flex items-center space-x-2">
+                        <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($user_data['first_name'] . ' ' . $user_data['last_name']); ?>&background=3b82f6&color=ffffff" 
+                             class="h-8 w-8 rounded-full">
+                        <span class="text-gray-700"><?php echo htmlspecialchars($user_data['first_name']); ?></span>
+                    </a>
                     <a href="logout.php" class="text-red-600 hover:text-red-700">
-                        <i class="fas fa-sign-out-alt"></i> Logout
+                        <i class="fas fa-sign-out-alt"></i>
                     </a>
                 </div>
             </div>
@@ -75,133 +88,198 @@ $total_appointments = $result_appointments->num_rows;
 
     <!-- Main Content -->
     <div class="max-w-7xl mx-auto px-4 py-8">
-        <!-- Quick Stats -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex items-center">
-                    <div class="p-3 bg-blue-100 rounded-full">
-                        <i class="fas fa-calendar text-blue-600"></i>
-                    </div>
-                    <div class="ml-4">
-                        <h3 class="text-gray-500 text-sm">Upcoming Appointments</h3>
-                        <p class="text-2xl font-semibold"><?php echo $total_appointments; ?></p>
-                    </div>
+        <!-- Welcome Banner -->
+        <div class="bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg shadow-lg p-6 mb-8">
+            <div class="flex items-center justify-between">
+                <div class="text-white">
+                    <h1 class="text-2xl font-bold">Welcome back, <?php echo htmlspecialchars($user_data['first_name']); ?>!</h1>
+                    <p class="mt-1 text-blue-100">Manage your vehicles and appointments here</p>
                 </div>
-            </div>
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex items-center">
-                    <div class="p-3 bg-green-100 rounded-full">
-                        <i class="fas fa-car text-green-600"></i>
-                    </div>
-                    <div class="ml-4">
-                        <h3 class="text-gray-500 text-sm">My Vehicles</h3>
-                        <p class="text-2xl font-semibold"><?php echo $result_vehicles->num_rows; ?></p>
-                    </div>
-                </div>
-            </div>
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <a href="book_appointment.php" class="flex items-center justify-center space-x-2 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition">
-                    <i class="fas fa-plus"></i>
-                    <span>Book New Appointment</span>
+                <a href="book_appointment.php" class="bg-white text-blue-600 px-6 py-2 rounded-lg hover:bg-blue-50 transition">
+                    Book Appointment
                 </a>
             </div>
         </div>
 
-        <!-- Upcoming Appointments -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 class="text-xl font-semibold mb-4">Upcoming Appointments</h2>
-            <?php if ($result_appointments->num_rows > 0): ?>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full">
-                        <thead>
-                            <tr class="bg-gray-50">
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            <?php while($appointment = $result_appointments->fetch_assoc()): ?>
-                                <tr>
-                                    <td class="px-6 py-4"><?php echo htmlspecialchars($appointment['service_name']); ?></td>
-                                    <td class="px-6 py-4"><?php echo date('M d, Y', strtotime($appointment['appointment_date'])); ?></td>
-                                    <td class="px-6 py-4">
-                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                            <?php echo $appointment['status'] == 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                                    ($appointment['status'] == 'completed' ? 'bg-green-100 text-green-800' : 
-                                                    'bg-gray-100 text-gray-800'); ?>">
-                                            <?php echo ucfirst($appointment['status']); ?>
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4">$<?php echo number_format($appointment['price'], 2); ?></td>
-                                    <td class="px-6 py-4">
-                                        <a href="view_appointment.php?id=<?php echo $appointment['appointment_id']; ?>" 
-                                           class="text-blue-600 hover:text-blue-900">View Details</a>
-                                    </td>
-                                </tr>
-                            <?php endwhile; ?>
-                        </tbody>
-                    </table>
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
+                <div class="flex items-center">
+                    <div class="p-3 bg-blue-100 rounded-full">
+                        <i class="fas fa-car text-blue-600 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-gray-500 text-sm">Your Vehicles</p>
+                        <h3 class="text-2xl font-bold"><?php echo $stats['total_vehicles']; ?></h3>
+                    </div>
                 </div>
-            <?php else: ?>
-                <p class="text-gray-500">No upcoming appointments.</p>
-            <?php endif; ?>
+            </div>
+            <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
+                <div class="flex items-center">
+                    <div class="p-3 bg-green-100 rounded-full">
+                        <i class="fas fa-calendar-check text-green-600 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-gray-500 text-sm">Total Appointments</p>
+                        <h3 class="text-2xl font-bold"><?php echo $stats['total_appointments']; ?></h3>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
+                <div class="flex items-center">
+                    <div class="p-3 bg-purple-100 rounded-full">
+                        <i class="fas fa-check-circle text-purple-600 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-gray-500 text-sm">Completed Services</p>
+                        <h3 class="text-2xl font-bold"><?php echo $stats['completed_services']; ?></h3>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- My Vehicles -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-semibold">My Vehicles</h2>
-                    <a href="manage_vehicles.php" class="text-blue-600 hover:text-blue-700">
-                        <i class="fas fa-plus"></i> Add Vehicle
-                    </a>
-                </div>
-                <?php if ($result_vehicles->num_rows > 0): ?>
-                    <div class="space-y-4">
-                        <?php while($vehicle = $result_vehicles->fetch_assoc()): ?>
-                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                                <div class="flex items-center space-x-4">
-                                    <i class="fas fa-car text-gray-400 text-2xl"></i>
-                                    <div>
-                                        <h3 class="font-medium"><?php echo htmlspecialchars($vehicle['make'] . ' ' . $vehicle['model']); ?></h3>
-                                        <p class="text-sm text-gray-500"><?php echo htmlspecialchars($vehicle['year']); ?> - <?php echo htmlspecialchars($vehicle['license_plate']); ?></p>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Upcoming Appointments -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4">Upcoming Appointments</h2>
+                    <?php if ($result_appointments->num_rows > 0): ?>
+                        <div class="space-y-4">
+                            <?php while($appointment = $result_appointments->fetch_assoc()): ?>
+                                <div class="border rounded-lg p-4 hover:border-blue-500 transition">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex items-start space-x-4">
+                                            <div class="p-2 bg-blue-100 rounded-lg">
+                                                <img src="https://cdn-icons-png.flaticon.com/512/4635/4635595.png" 
+                                                     alt="Service" class="w-12 h-12">
+                                            </div>
+                                            <div>
+                                                <h3 class="font-semibold"><?php echo htmlspecialchars($appointment['service_name']); ?></h3>
+                                                <p class="text-sm text-gray-600">
+                                                    <i class="far fa-calendar mr-1"></i>
+                                                    <?php echo date('M d, Y - h:i A', strtotime($appointment['appointment_date'])); ?>
+                                                </p>
+                                                <p class="text-sm text-gray-600">
+                                                    <i class="fas fa-car mr-1"></i>
+                                                    <?php echo htmlspecialchars($appointment['make'] . ' ' . $appointment['model']); ?>
+                                                </p>
+                                                <?php if ($appointment['tech_first_name']): ?>
+                                                    <p class="text-sm text-gray-600">
+                                                        <i class="fas fa-user-md mr-1"></i>
+                                                        Technician: <?php echo htmlspecialchars($appointment['tech_first_name'] . ' ' . $appointment['tech_last_name']); ?>
+                                                    </p>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <span class="px-3 py-1 rounded-full text-sm 
+                                                <?php echo $appointment['status'] == 'pending' ? 'bg-yellow-100 text-yellow-800' : 
+                                                    ($appointment['status'] == 'completed' ? 'bg-green-100 text-green-800' : 
+                                                    'bg-blue-100 text-blue-800'); ?>">
+                                                <?php echo ucfirst($appointment['status']); ?>
+                                            </span>
+                                            <p class="mt-2 font-semibold">$<?php echo number_format($appointment['price'], 2); ?></p>
+                                        </div>
                                     </div>
                                 </div>
-                                <a href="vehicle_details.php?id=<?php echo $vehicle['vehicle_id']; ?>" 
-                                   class="text-blue-600 hover:text-blue-700">
-                                    <i class="fas fa-chevron-right"></i>
-                                </a>
-                            </div>
-                        <?php endwhile; ?>
+                            <?php endwhile; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-center py-8">
+                            <img src="https://cdn-icons-png.flaticon.com/512/6598/6598519.png" 
+                                 alt="No appointments" class="w-24 h-24 mx-auto mb-4 opacity-50">
+                            <p class="text-gray-500">No upcoming appointments</p>
+                            <a href="book_appointment.php" class="mt-4 inline-block text-blue-600 hover:text-blue-700">
+                                Schedule your first appointment →
+                            </a>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Your Vehicles -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold">Your Vehicles</h2>
+                        <a href="manage_vehicles.php" class="text-blue-600 hover:text-blue-700">
+                            <i class="fas fa-plus"></i> Add Vehicle
+                        </a>
                     </div>
-                <?php else: ?>
-                    <p class="text-gray-500">No vehicles registered.</p>
-                <?php endif; ?>
+                    <?php if ($result_vehicles->num_rows > 0): ?>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <?php while($vehicle = $result_vehicles->fetch_assoc()): ?>
+                                <div class="border rounded-lg p-4 hover:border-blue-500 transition">
+                                    <div class="flex items-center space-x-4">
+                                        <img src="https://cdn-icons-png.flaticon.com/512/3774/3774278.png" 
+                                             alt="Vehicle" class="w-16 h-16">
+                                        <div>
+                                            <h3 class="font-semibold"><?php echo htmlspecialchars($vehicle['make'] . ' ' . $vehicle['model']); ?></h3>
+                                            <p class="text-sm text-gray-600">Year: <?php echo htmlspecialchars($vehicle['year']); ?></p>
+                                            <p class="text-sm text-gray-600">Plate: <?php echo htmlspecialchars($vehicle['license_plate']); ?></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endwhile; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-center py-8">
+                            <img src="https://cdn-icons-png.flaticon.com/512/2554/2554969.png" 
+                                 alt="No vehicles" class="w-24 h-24 mx-auto mb-4 opacity-50">
+                            <p class="text-gray-500">No vehicles registered</p>
+                            <a href="manage_vehicles.php" class="mt-4 inline-block text-blue-600 hover:text-blue-700">
+                                Register your first vehicle →
+                            </a>
+                        </div>
+                    <?php endif; ?>
+                </div>
             </div>
 
-            <!-- Service History -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-semibold mb-4">Service History</h2>
-                <?php if ($result_history->num_rows > 0): ?>
-                    <div class="space-y-4">
-                        <?php while($history = $result_history->fetch_assoc()): ?>
-                            <div class="p-4 bg-gray-50 rounded-lg">
-                                <div class="flex justify-between items-start">
-                                    <div>
-                                        <h3 class="font-medium"><?php echo htmlspecialchars($history['service_name']); ?></h3>
-                                        <p class="text-sm text-gray-500"><?php echo date('M d, Y', strtotime($history['appointment_date'])); ?></p>
-                                    </div>
-                                    <span class="text-green-600 font-medium">$<?php echo number_format($history['price'], 2); ?></span>
-                                </div>
-                            </div>
-                        <?php endwhile; ?>
+            <!-- Sidebar -->
+            <div class="space-y-6">
+                <!-- Quick Actions -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4">Quick Actions</h2>
+                    <div class="space-y-3">
+                        <a href="book_appointment.php" class="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition">
+                            <i class="fas fa-calendar-plus text-blue-600"></i>
+                            <span>Book New Appointment</span>
+                        </a>
+                        <a href="manage_vehicles.php" class="flex items-center space-x-3 p-3 bg-green-50 rounded-lg hover:bg-green-100 transition">
+                            <i class="fas fa-car text-green-600"></i>
+                            <span>Manage Vehicles</span>
+                        </a>
+                        <a href="service_history.php" class="flex items-center space-x-3 p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition">
+                            <i class="fas fa-history text-purple-600"></i>
+                            <span>View Service History</span>
+                        </a>
                     </div>
-                <?php else: ?>
-                    <p class="text-gray-500">No service history available.</p>
-                <?php endif; ?>
+                </div>
+
+                <!-- Latest Updates -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4">Latest Updates</h2>
+                    <div class="space-y-4">
+                        <div class="flex items-start space-x-3">
+                            <div class="p-2 bg-blue-100 rounded-lg">
+                                <img src="https://cdn-icons-png.flaticon.com/512/4635/4635595.png" 
+                                     alt="Service" class="w-12 h-12">
+                            </div>
+                            <div>
+                                <h3 class="font-semibold">New Service Available</h3>
+                                <p class="text-sm text-gray-600">We have added a new service to our offerings. Check it out now!</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-3">
+                            <div class="p-2 bg-green-100 rounded-lg">
+                                <img src="https://cdn-icons-png.flaticon.com/512/3774/3774278.png" 
+                                     alt="Vehicle" class="w-12 h-12">
+                            </div>
+                            <div>
+                                <h3 class="font-semibold">Vehicle Maintenance Tips</h3>
+                                <p class="text-sm text-gray-600">Read our latest blog post on how to keep your vehicle in top condition.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
