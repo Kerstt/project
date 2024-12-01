@@ -1,37 +1,111 @@
 <?php
 include 'includes/db.php';
+include 'includes/auth_middleware.php';
 session_start();
 
-if ($_SESSION['role'] != 'admin') {
-    header('Location: login.php');
-    exit();
+// Check admin authentication
+checkAdminAuth();
+
+// Handle CRUD operations
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (isset($_POST['action'])) {
+        switch ($_POST['action']) {
+            case 'update_status':
+                $appointment_id = $_POST['appointment_id'];
+                $new_status = $_POST['status'];
+                $notes = $_POST['notes'];
+                
+                // Begin transaction
+                $conn->begin_transaction();
+                try {
+                    // Get current status
+                    $stmt = $conn->prepare("SELECT status FROM appointments WHERE appointment_id = ?");
+                    $stmt->bind_param("i", $appointment_id);
+                    $stmt->execute();
+                    $old_status = $stmt->get_result()->fetch_assoc()['status'];
+                    
+                    // Update appointment status
+                    $stmt = $conn->prepare("UPDATE appointments SET status = ?, notes = CONCAT(IFNULL(notes,''), '\n', ?) WHERE appointment_id = ?");
+                    $stmt->bind_param("ssi", $new_status, $notes, $appointment_id);
+                    $stmt->execute();
+                    
+                    // Log the change
+                    $stmt = $conn->prepare("INSERT INTO appointment_logs (appointment_id, status_from, status_to, notes, created_by) VALUES (?, ?, ?, ?, ?)");
+                    $stmt->bind_param("isssi", $appointment_id, $old_status, $new_status, $notes, $_SESSION['user_id']);
+                    $stmt->execute();
+                    
+                    // If status is completed and payment is pending, create payment record
+                    if ($new_status == 'completed') {
+                        $stmt = $conn->prepare("
+                            INSERT INTO payments (appointment_id, amount, status, payment_date)
+                            SELECT a.appointment_id, s.price, 'pending', NOW()
+                            FROM appointments a
+                            JOIN services s ON a.service_id = s.service_id
+                            WHERE a.appointment_id = ? AND NOT EXISTS (
+                                SELECT 1 FROM payments WHERE appointment_id = ?
+                            )
+                        ");
+                        $stmt->bind_param("ii", $appointment_id, $appointment_id);
+                        $stmt->execute();
+                    }
+                    
+                    $conn->commit();
+                    $success_message = "Appointment updated successfully";
+                } catch (Exception $e) {
+                    $conn->rollback();
+                    $error_message = "Error updating appointment: " . $e->getMessage();
+                }
+                break;
+                
+            case 'delete':
+                $appointment_id = $_POST['appointment_id'];
+                $stmt = $conn->prepare("UPDATE appointments SET status = 'cancelled' WHERE appointment_id = ?");
+                $stmt->bind_param("i", $appointment_id);
+                if ($stmt->execute()) {
+                    $success_message = "Appointment cancelled successfully";
+                } else {
+                    $error_message = "Error cancelling appointment";
+                }
+                break;
+        }
+    }
 }
 
-// Add this query with other dashboard stats queries
-$services_sql = "SELECT COUNT(*) AS total_services FROM services";
-$services_result = $conn->query($services_sql);
-$total_services = $services_result->fetch_assoc()['total_services'];
+// Fetch statistics
+$stats_sql = "SELECT 
+    (SELECT COUNT(*) FROM appointments WHERE status = 'pending') as pending_appointments,
+    (SELECT COUNT(*) FROM appointments WHERE status = 'completed') as completed_appointments,
+    (SELECT COUNT(*) FROM users WHERE role = 'customer') as total_customers,
+    (SELECT SUM(amount) FROM payments WHERE status = 'paid') as total_revenue";
+$stats = $conn->query($stats_sql)->fetch_assoc();
 
-// Rest of your existing queries remain the same
-$total_users_sql = "SELECT COUNT(*) AS total_users FROM users";
-$total_users_result = $conn->query($total_users_sql);
-$total_users = $total_users_result->fetch_assoc()['total_users'];
+// Fetch recent appointments with pagination
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$per_page = 10;
+$offset = ($page - 1) * $per_page;
 
-$total_appointments_sql = "SELECT COUNT(*) AS total_appointments FROM appointments";
-$total_appointments_result = $conn->query($total_appointments_sql);
-$total_appointments = $total_appointments_result->fetch_assoc()['total_appointments'];
+$appointments_sql = "
+    SELECT a.*, 
+           u.first_name, u.last_name, 
+           s.name as service_name, s.price,
+           t.first_name as tech_first_name, t.last_name as tech_last_name,
+           p.status as payment_status, p.payment_method
+    FROM appointments a 
+    JOIN users u ON a.user_id = u.user_id 
+    JOIN services s ON a.service_id = s.service_id 
+    LEFT JOIN users t ON a.technician_id = t.user_id
+    LEFT JOIN payments p ON a.appointment_id = p.appointment_id
+    ORDER BY a.appointment_date DESC
+    LIMIT ? OFFSET ?";
+    
+$stmt = $conn->prepare($appointments_sql);
+$stmt->bind_param("ii", $per_page, $offset);
+$stmt->execute();
+$appointments = $stmt->get_result();
 
-$revenue_sql = "SELECT SUM(amount) AS total_revenue FROM payments";
-$revenue_result = $conn->query($revenue_sql);
-$total_revenue = $revenue_result->fetch_assoc()['total_revenue'] ?? 0; // Added fallback for null revenue
-
-// Updated query to use user_id instead of customer_id
-$sql = "SELECT a.*, u.first_name, u.last_name, s.name as service_name 
-        FROM appointments a 
-        JOIN users u ON a.user_id = u.user_id 
-        JOIN services s ON a.service_id = s.service_id 
-        ORDER BY a.appointment_date DESC";
-$result = $conn->query($sql);
+// Fetch available technicians
+$technicians_sql = "SELECT user_id, first_name, last_name FROM users WHERE role = 'technician'";
+$technicians = $conn->query($technicians_sql);
 ?>
 
 <!DOCTYPE html>
@@ -98,7 +172,7 @@ $result = $conn->query($sql);
                     </div>
                     <div class="ml-4">
                         <p class="text-gray-500 text-sm">Total Users</p>
-                        <h3 class="text-2xl font-bold"><?php echo $total_users; ?></h3>
+                        <h3 class="text-2xl font-bold"><?php echo $stats['total_customers']; ?></h3>
                     </div>
                 </div>
             </div>
@@ -109,7 +183,7 @@ $result = $conn->query($sql);
                     </div>
                     <div class="ml-4">
                         <p class="text-gray-500 text-sm">Appointments</p>
-                        <h3 class="text-2xl font-bold"><?php echo $total_appointments; ?></h3>
+                        <h3 class="text-2xl font-bold"><?php echo $stats['pending_appointments']; ?></h3>
                     </div>
                 </div>
             </div>
@@ -120,7 +194,7 @@ $result = $conn->query($sql);
                     </div>
                     <div class="ml-4">
                         <p class="text-gray-500 text-sm">Revenue</p>
-                        <h3 class="text-2xl font-bold">$<?php echo number_format($total_revenue, 2); ?></h3>
+                        <h3 class="text-2xl font-bold">$<?php echo number_format($stats['total_revenue'], 2); ?></h3>
                     </div>
                 </div>
             </div>
@@ -131,7 +205,7 @@ $result = $conn->query($sql);
                     </div>
                     <div class="ml-4">
                         <p class="text-gray-500 text-sm">Services</p>
-                        <h3 class="text-2xl font-bold"><?php echo $total_services; ?></h3>
+                        <h3 class="text-2xl font-bold"><?php echo $stats['completed_appointments']; ?></h3>
                     </div>
                 </div>
             </div>
@@ -158,11 +232,12 @@ $result = $conn->query($sql);
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
-                        <?php while($appointment = $result->fetch_assoc()): ?>
+                        <?php while($appointment = $appointments->fetch_assoc()): ?>
                             <tr class="hover:bg-gray-50">
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="flex items-center">
@@ -190,10 +265,32 @@ $result = $conn->query($sql);
                                         <?php echo ucfirst($appointment['status']); ?>
                                     </span>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <a href="#" class="text-blue-600 hover:text-blue-900 mr-3">View</a>
-                                    <a href="#" class="text-green-600 hover:text-green-900 mr-3">Edit</a>
-                                    <a href="#" class="text-red-600 hover:text-red-900">Delete</a>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                        <?php echo !$appointment['payment_status'] ? 'bg-red-100 text-red-800' : 
+                                            ($appointment['payment_status'] == 'paid' ? 'bg-green-100 text-green-800' : 
+                                            'bg-yellow-100 text-yellow-800'); ?>">
+                                        <?php echo $appointment['payment_status'] ? ucfirst($appointment['payment_status']) : 'Unpaid'; ?>
+                                    </span>
+                                    <?php if($appointment['payment_method']): ?>
+                                        <span class="ml-2 text-xs text-gray-500">
+                                            <i class="fas <?php echo $appointment['payment_method'] == 'credit_card' ? 'fa-credit-card' : 'fa-money-bill'; ?>"></i>
+                                            <?php echo ucfirst($appointment['payment_method']); ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <button onclick="openUpdateModal(<?php echo $appointment['appointment_id']; ?>)"
+                                            class="text-blue-600 hover:text-blue-900 mr-2">
+                                        <i class="fas fa-edit"></i> Update
+                                    </button>
+                                    <form method="POST" class="inline" onsubmit="return confirm('Are you sure you want to cancel this appointment?');">
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="appointment_id" value="<?php echo $appointment['appointment_id']; ?>">
+                                        <button type="submit" class="text-red-600 hover:text-red-900">
+                                            <i class="fas fa-trash"></i> Cancel
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                         <?php endwhile; ?>
@@ -202,5 +299,76 @@ $result = $conn->query($sql);
             </div>
         </div>
     </div>
+
+    <!-- Add this modal for updating appointment status -->
+    <div id="updateStatusModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <form id="updateStatusForm" method="POST">
+                <input type="hidden" name="action" value="update_status">
+                <input type="hidden" name="appointment_id" id="modal_appointment_id">
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Status</label>
+                    <select name="status" class="shadow border rounded w-full py-2 px-3">
+                        <option value="pending">Pending</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="in-progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Notes</label>
+                    <textarea name="notes" class="shadow border rounded w-full py-2 px-3"></textarea>
+                </div>
+                
+                <div class="flex justify-end space-x-2">
+                    <button type="button" onclick="closeModal('updateStatusModal')" 
+                            class="bg-gray-500 text-white px-4 py-2 rounded">Cancel</button>
+                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add this JavaScript for modal handling -->
+    <script>
+    function openUpdateModal(appointmentId) {
+        document.getElementById('modal_appointment_id').value = appointmentId;
+        document.getElementById('updateStatusModal').classList.remove('hidden');
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).classList.add('hidden');
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        if (event.target.classList.contains('modal-overlay')) {
+            closeModal('updateStatusModal');
+        }
+    }
+    </script>
+
+    <!-- Add to admin_dashboard.php before </body> -->
+    <script>
+    function checkNewPayments() {
+        fetch('check_new_payments.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.new_payments) {
+                    updatePaymentStatus();
+                }
+            });
+    }
+
+    function updatePaymentStatus() {
+        location.reload(); // For simplicity, reload the page
+    }
+
+    // Check for new payments every 30 seconds
+    setInterval(checkNewPayments, 30000);
+    </script>
 </body>
 </html>

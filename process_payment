@@ -1,0 +1,39 @@
+<?php
+include 'includes/db.php';
+include 'includes/PaymentProcessor.php';
+session_start();
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $appointment_id = $_POST['appointment_id'];
+    $payment_method = $_POST['payment_method'];
+    $user_id = $_SESSION['user_id'];
+    
+    try {
+        // Get appointment details
+        $stmt = $conn->prepare("
+            SELECT a.*, s.price, s.name as service_name
+            FROM appointments a 
+            JOIN services s ON a.service_id = s.service_id 
+            WHERE a.appointment_id = ?
+        ");
+        $stmt->bind_param("i", $appointment_id);
+        $stmt->execute();
+        $appointment = $stmt->get_result()->fetch_assoc();
+        
+        // Process payment
+        if (PaymentProcessor::processPayment($appointment_id, $appointment['price'], $payment_method, $user_id)) {
+            $_SESSION['success_message'] = "Payment processed successfully!";
+            header('Location: customer_dashboard.php');
+            exit();
+        }
+    } catch (Exception $e) {
+        $_SESSION['error_message'] = "Payment failed: " . $e->getMessage();
+        header('Location: payment.php?appointment_id=' . $appointment_id);
+        exit();
+    }
+} else {
+    // Invalid request method
+    header('Location: index.php');
+    exit();
+}
+?>
