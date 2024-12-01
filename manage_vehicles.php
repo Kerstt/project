@@ -10,16 +10,92 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $make = $_POST['make'];
-    $model = $_POST['model'];
-    $year = $_POST['year'];
-    $license_plate = $_POST['license_plate'];
-    
-    $sql = "INSERT INTO vehicles (user_id, make, model, year, license_plate) 
-            VALUES (?, ?, ?, ?, ?)";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("issis", $user_id, $make, $model, $year, $license_plate);
-    $stmt->execute();
+    if (isset($_POST['action'])) {
+        switch ($_POST['action']) {
+            case 'edit':
+                $vehicle_id = $_POST['vehicle_id'];
+                $make = $_POST['make'];
+                $model = $_POST['model'];
+                $year = $_POST['year'];
+                $license_plate = $_POST['license_plate'];
+                
+                $sql = "UPDATE vehicles 
+                        SET make = ?, model = ?, year = ?, license_plate = ? 
+                        WHERE vehicle_id = ? AND user_id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ssissi", $make, $model, $year, $license_plate, $vehicle_id, $user_id);
+                
+                if ($stmt->execute()) {
+                    $_SESSION['success_message'] = "Vehicle updated successfully";
+                } else {
+                    $_SESSION['error_message'] = "Error updating vehicle";
+                }
+                break;
+                
+            case 'delete':
+                $vehicle_id = $_POST['vehicle_id'];
+                
+                // Check if vehicle has appointments
+                $check_sql = "SELECT COUNT(*) as count FROM appointments WHERE vehicle_id = ?";
+                $stmt = $conn->prepare($check_sql);
+                $stmt->bind_param("i", $vehicle_id);
+                $stmt->execute();
+                $result = $stmt->get_result()->fetch_assoc();
+                
+                if ($result['count'] > 0) {
+                    $_SESSION['error_message'] = "Cannot delete vehicle as it has associated appointments";
+                } else {
+                    $sql = "DELETE FROM vehicles WHERE vehicle_id = ? AND user_id = ?";
+                    $stmt = $conn->prepare($sql);
+                    $stmt->bind_param("ii", $vehicle_id, $user_id);
+                    
+                    if ($stmt->execute()) {
+                        $_SESSION['success_message'] = "Vehicle deleted successfully";
+                    } else {
+                        $_SESSION['error_message'] = "Error deleting vehicle";
+                    }
+                }
+                break;
+                
+            default:
+                // Handle adding new vehicle (existing code)
+                $make = $_POST['make'];
+                $model = $_POST['model'];
+                $year = $_POST['year'];
+                $license_plate = $_POST['license_plate'];
+                
+                $sql = "INSERT INTO vehicles (user_id, make, model, year, license_plate) 
+                        VALUES (?, ?, ?, ?, ?)";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("issis", $user_id, $make, $model, $year, $license_plate);
+                
+                if ($stmt->execute()) {
+                    $_SESSION['success_message'] = "Vehicle added successfully";
+                } else {
+                    $_SESSION['error_message'] = "Error adding vehicle";
+                }
+        }
+    } else {
+        // This handles adding new vehicle
+        $make = $_POST['make'];
+        $model = $_POST['model'];
+        $year = $_POST['year'];
+        $license_plate = $_POST['license_plate'];
+        
+        $sql = "INSERT INTO vehicles (user_id, make, model, year, license_plate) 
+                VALUES (?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("issis", $user_id, $make, $model, $year, $license_plate);
+        
+        if ($stmt->execute()) {
+            $_SESSION['success_message'] = "Vehicle added successfully";
+        } else {
+            $_SESSION['error_message'] = "Error adding vehicle";
+        }
+        
+        header('Location: manage_vehicles.php');
+        exit();
+    }
 }
 
 // Fetch vehicles with stats
@@ -126,6 +202,29 @@ $stats = $stmt->get_result()->fetch_assoc();
         </div>
     </div>
 
+    <!-- Add this right after the hero section -->
+    <?php if (isset($_SESSION['success_message'])): ?>
+        <div class="max-w-7xl mx-auto px-4 mt-4">
+            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert">
+                <?php 
+                    echo $_SESSION['success_message'];
+                    unset($_SESSION['success_message']);
+                ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if (isset($_SESSION['error_message'])): ?>
+        <div class="max-w-7xl mx-auto px-4 mt-4">
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                <?php 
+                    echo $_SESSION['error_message'];
+                    unset($_SESSION['error_message']);
+                ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <!-- Vehicles Grid -->
     <div class="max-w-7xl mx-auto px-4 py-12">
         <?php if ($result->num_rows > 0): ?>
@@ -170,7 +269,7 @@ $stats = $stmt->get_result()->fetch_assoc();
                                     View Details
                                 </a>
                                 <button class="p-2 text-gray-500 hover:text-blue-600 transition-colors"
-                                        onclick="editVehicle(<?php echo $vehicle['vehicle_id']; ?>)">
+                                        onclick='editVehicle(<?php echo json_encode($vehicle); ?>)'>
                                     <i class="fas fa-edit"></i>
                                 </button>
                                 <button class="p-2 text-gray-500 hover:text-red-600 transition-colors"
@@ -192,40 +291,129 @@ $stats = $stmt->get_result()->fetch_assoc();
                 <div class="p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-xl font-semibold">Add New Vehicle</h3>
-                        <button onclick="document.getElementById('addVehicleModal').classList.add('hidden')"
+                        <button onclick="closeModal('addVehicleModal')"
                                 class="text-gray-400 hover:text-gray-500">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
-                    <form method="POST" class="space-y-4">
+                    <form method="POST" action="manage_vehicles.php" class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Make</label>
-                            <input type="text" name="make" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm">
+                            <input type="text" name="make" required 
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Model</label>
-                            <input type="text" name="model" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm">
+                            <input type="text" name="model" required 
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Year</label>
-                            <input type="number" name="year" required min="1900" max="<?php echo date('Y') + 1; ?>" 
-                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm">
+                            <input type="number" name="year" required 
+                                   min="1900" max="<?php echo date('Y') + 1; ?>" 
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">License Plate</label>
                             <input type="text" name="license_plate" required 
-                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm">
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                         </div>
                         <div class="flex justify-end space-x-3 mt-6">
-                            <button type="button" onclick="document.getElementById('addVehicleModal').classList.add('hidden')"
+                            <button type="button" onclick="closeModal('addVehicleModal')"
                                     class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
                                 Cancel
                             </button>
-                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            <button type="submit"
+                                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                                 Add Vehicle
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Vehicle Modal -->
+    <div id="editVehicleModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50">
+        <div class="min-h-screen flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold">Edit Vehicle</h3>
+                        <button onclick="closeModal('editVehicleModal')"
+                                class="text-gray-400 hover:text-gray-500">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <form method="POST" id="editVehicleForm" class="space-y-4">
+                        <input type="hidden" name="action" value="edit">
+                        <input type="hidden" name="vehicle_id" id="edit_vehicle_id">
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Make</label>
+                            <input type="text" name="make" id="edit_make" required 
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Model</label>
+                            <input type="text" name="model" id="edit_model" required 
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Year</label>
+                            <input type="number" name="year" id="edit_year" required 
+                                   min="1900" max="<?php echo date('Y') + 1; ?>"
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">License Plate</label>
+                            <input type="text" name="license_plate" id="edit_license_plate" required 
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm">
+                        </div>
+                        <div class="flex justify-end space-x-3 mt-6">
+                            <button type="button" onclick="closeModal('editVehicleModal')"
+                                    class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                                Cancel
+                            </button>
+                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteVehicleModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50">
+        <div class="min-h-screen flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+                <div class="p-6">
+                    <div class="text-center">
+                        <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                            <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+                        </div>
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Delete Vehicle</h3>
+                        <p class="text-sm text-gray-500 mb-6">Are you sure you want to delete this vehicle? This action cannot be undone.</p>
+                        
+                        <form method="POST" id="deleteVehicleForm">
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="vehicle_id" id="delete_vehicle_id">
+                            
+                            <div class="flex justify-center space-x-4">
+                                <button type="button" onclick="closeModal('deleteVehicleModal')"
+                                        class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                                    Cancel
+                                </button>
+                                <button type="submit"
+                                        class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                                    Delete Vehicle
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -238,8 +426,37 @@ $stats = $stmt->get_result()->fetch_assoc();
             }
         }
 
-        function editVehicle(id) {
-            window.location.href = 'edit_vehicle.php?id=' + id;
+        function editVehicle(vehicle) {
+            // Populate the edit form
+            document.getElementById('edit_vehicle_id').value = vehicle.vehicle_id;
+            document.getElementById('edit_make').value = vehicle.make;
+            document.getElementById('edit_model').value = vehicle.model;
+            document.getElementById('edit_year').value = vehicle.year;
+            document.getElementById('edit_license_plate').value = vehicle.license_plate;
+            
+            // Show the modal
+            document.getElementById('editVehicleModal').classList.remove('hidden');
+        }
+
+        function deleteVehicle(vehicleId) {
+            document.getElementById('delete_vehicle_id').value = vehicleId;
+            document.getElementById('deleteVehicleModal').classList.remove('hidden');
+        }
+
+        // Update the modal functions
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        // Update window click handler
+        window.onclick = function(event) {
+            const modals = ['addVehicleModal', 'editVehicleModal', 'deleteVehicleModal'];
+            modals.forEach(modalId => {
+                const modal = document.getElementById(modalId);
+                if (event.target === modal) {
+                    closeModal(modalId);
+                }
+            });
         }
     </script>
 </body>

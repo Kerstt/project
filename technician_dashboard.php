@@ -23,11 +23,13 @@ $user_id = $_SESSION['user_id'];
 
 // Update the main query in technician_dashboard.php (around line 38)
 $sql = "SELECT a.*, 
-        s.name as service_name, s.price as service_price,
+        COALESCE(s.name, sp.name) as service_name,
+        COALESCE(s.price, sp.price) as service_price,
         u.first_name, u.last_name,
         v.make, v.model, v.year
         FROM appointments a
-        JOIN services s ON a.service_id = s.service_id
+        LEFT JOIN services s ON a.service_id = s.service_id
+        LEFT JOIN service_packages sp ON a.package_id = sp.package_id
         JOIN users u ON a.user_id = u.user_id
         JOIN vehicles v ON a.vehicle_id = v.vehicle_id
         WHERE a.technician_id = ?

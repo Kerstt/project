@@ -32,48 +32,67 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $conn->begin_transaction();
     try {
         if (isset($_POST['package_id']) && !empty($_POST['package_id'])) {
-            // Handle package booking
+            // Package booking
             $package_id = $_POST['package_id'];
             
-            // Get package details
-            $stmt = $conn->prepare("SELECT * FROM service_packages WHERE package_id = ?");
+            // Verify package exists and is active
+            $stmt = $conn->prepare("SELECT package_id FROM service_packages WHERE package_id = ? AND is_active = 1");
             $stmt->bind_param("i", $package_id);
             $stmt->execute();
-            $package = $stmt->get_result()->fetch_assoc();
+            $result = $stmt->get_result();
             
-            // Create appointment
-            $sql = "INSERT INTO appointments (user_id, vehicle_id, package_id, appointment_date, notes, status) 
-                    VALUES (?, ?, ?, ?, ?, 'pending')";
+            if ($result->num_rows === 0) {
+                throw new Exception("Selected package is not available");
+            }
+            
+            // Create appointment for package
+            $sql = "INSERT INTO appointments (user_id, vehicle_id, package_id, service_id, appointment_date, notes, status) 
+                    VALUES (?, ?, ?, NULL, ?, ?, 'pending')";
             $stmt = $conn->prepare($sql);
             $stmt->bind_param("iiiss", $user_id, $vehicle_id, $package_id, $appointment_date, $notes);
             
-        } else {
-            // Handle single service booking
+        } elseif (isset($_POST['service_id']) && !empty($_POST['service_id'])) {
+            // Single service booking
             $service_id = $_POST['service_id'];
             
-            $sql = "INSERT INTO appointments (user_id, vehicle_id, service_id, appointment_date, notes, status) 
-                    VALUES (?, ?, ?, ?, ?, 'pending')";
+            // Verify service exists
+            $stmt = $conn->prepare("SELECT service_id FROM services WHERE service_id = ?");
+            $stmt->bind_param("i", $service_id);
+            $stmt->execute();
+            if ($stmt->get_result()->num_rows === 0) {
+                throw new Exception("Selected service is not available");
+            }
+            
+            // Create appointment for service
+            $sql = "INSERT INTO appointments (user_id, vehicle_id, service_id, package_id, appointment_date, notes, status) 
+                    VALUES (?, ?, ?, NULL, ?, ?, 'pending')";
             $stmt = $conn->prepare($sql);
             $stmt->bind_param("iiiss", $user_id, $vehicle_id, $service_id, $appointment_date, $notes);
+            
+        } else {
+            throw new Exception("Please select a service or package");
         }
         
-        if ($stmt->execute()) {
-            $appointment_id = $conn->insert_id;
-            
-            // Create notification for admin
-            $notify_sql = "INSERT INTO notifications (user_id, type, message, appointment_id) 
-                          SELECT user_id, 'new_appointment', 
-                          CONCAT('New appointment booking #', ?), ?
-                          FROM users WHERE role = 'admin'";
-            $notify_stmt = $conn->prepare($notify_sql);
-            $notify_stmt->bind_param("ii", $appointment_id, $appointment_id);
-            $notify_stmt->execute();
-            
-            $conn->commit();
-            $_SESSION['success_message'] = "Appointment booked successfully!";
-            header('Location: customer_dashboard.php');
-            exit();
+        if (!$stmt->execute()) {
+            throw new Exception("Database error: " . $stmt->error);
         }
+        
+        $appointment_id = $conn->insert_id;
+        
+        // Create notification for admin
+        $notify_sql = "INSERT INTO notifications (user_id, type, message, appointment_id) 
+                      SELECT user_id, 'new_appointment', 
+                      CONCAT('New appointment booking #', ?), ?
+                      FROM users WHERE role = 'admin'";
+        $notify_stmt = $conn->prepare($notify_sql);
+        $notify_stmt->bind_param("ii", $appointment_id, $appointment_id);
+        $notify_stmt->execute();
+        
+        $conn->commit();
+        $_SESSION['success_message'] = "Appointment booked successfully!";
+        header('Location: customer_dashboard.php');
+        exit();
+        
     } catch (Exception $e) {
         $conn->rollback();
         $error = "Error booking appointment: " . $e->getMessage();

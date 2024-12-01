@@ -6,6 +6,50 @@ session_start();
 // Check admin authentication
 checkAdminAuth();
 
+// Add search functionality
+if (isset($_GET['search'])) {
+    $search = "%" . $_GET['search'] . "%";
+    $appointments_sql = "
+        SELECT a.*, 
+               u.first_name, u.last_name,
+               COALESCE(s.name, sp.name) as service_name,
+               COALESCE(s.price, sp.price) as service_price,
+               t.first_name as tech_first_name, t.last_name as tech_last_name
+        FROM appointments a 
+        JOIN users u ON a.user_id = u.user_id 
+        LEFT JOIN services s ON a.service_id = s.service_id 
+        LEFT JOIN service_packages sp ON a.package_id = sp.package_id
+        LEFT JOIN users t ON a.technician_id = t.user_id
+        WHERE CONCAT(u.first_name, ' ', u.last_name) LIKE ?
+           OR COALESCE(s.name, sp.name) LIKE ?
+           OR a.status LIKE ?
+        ORDER BY a.appointment_date DESC";
+    
+    $stmt = $conn->prepare($appointments_sql);
+    $stmt->bind_param("sss", $search, $search, $search);
+    $stmt->execute();
+    $appointments = $stmt->get_result();
+} else {
+    // Default query for appointments
+    $appointments_sql = "
+        SELECT a.*, 
+               u.first_name, u.last_name,
+               COALESCE(s.name, sp.name) as service_name,
+               COALESCE(s.price, sp.price) as service_price,
+               t.first_name as tech_first_name, t.last_name as tech_last_name,
+               CASE 
+                   WHEN a.package_id IS NOT NULL THEN 'package'
+                   ELSE 'service'
+               END as service_type
+        FROM appointments a 
+        JOIN users u ON a.user_id = u.user_id 
+        LEFT JOIN services s ON a.service_id = s.service_id 
+        LEFT JOIN service_packages sp ON a.package_id = sp.package_id
+        LEFT JOIN users t ON a.technician_id = t.user_id
+        ORDER BY a.appointment_date DESC";
+    $appointments = $conn->query($appointments_sql);
+}
+
 // Handle CRUD operations
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['action'])) {
@@ -22,7 +66,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $stmt = $conn->prepare("
                         SELECT a.*, 
                                COALESCE(s.name, sp.name) as service_name,
-                               CASE WHEN a.package_id IS NOT NULL THEN 'package' ELSE 'service' END as booking_type
+                               CASE 
+                                   WHEN a.package_id IS NOT NULL THEN 'package'
+                                   ELSE 'service'
+                               END as booking_type
                         FROM appointments a
                         LEFT JOIN services s ON a.service_id = s.service_id
                         LEFT JOIN service_packages sp ON a.package_id = sp.package_id
@@ -58,7 +105,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     
                     // Notify technician if assigned
                     if ($technician_id && $technician_id != $current['technician_id']) {
-                        $tech_message = "You have been assigned to a new {$service_type} appointment #{$appointment_id}";
+                        $tech_message = "You have been assigned to appointment #" . $appointment_id;
+                        $stmt = $conn->prepare("
+                            INSERT INTO notifications (user_id, type, message, appointment_id)
+                            VALUES (?, 'assignment', ?, ?)
+                        ");
                         $stmt->bind_param("isi", $technician_id, $tech_message, $appointment_id);
                         $stmt->execute();
                     }
@@ -141,18 +192,21 @@ $stats_sql = "SELECT
 $stats = $conn->query($stats_sql)->fetch_assoc();
 
 // Fetch recent appointments
-$appointments_sql = "
-    SELECT a.*, 
-           u.first_name, u.last_name,
-           s.name as service_name,
-           s.price as service_price,
-           t.first_name as tech_first_name, t.last_name as tech_last_name
-    FROM appointments a 
-    JOIN users u ON a.user_id = u.user_id 
-    LEFT JOIN services s ON a.service_id = s.service_id 
-    LEFT JOIN users t ON a.technician_id = t.user_id
-    ORDER BY a.appointment_date DESC
-    LIMIT 10";
+if (!isset($_GET['search'])) {
+    $appointments_sql = "
+        SELECT a.*, 
+               u.first_name, u.last_name,
+               COALESCE(s.name, sp.name) as service_name,
+               COALESCE(s.price, sp.price) as service_price,
+               t.first_name as tech_first_name, t.last_name as tech_last_name
+        FROM appointments a 
+        JOIN users u ON a.user_id = u.user_id 
+        LEFT JOIN services s ON a.service_id = s.service_id 
+        LEFT JOIN service_packages sp ON a.package_id = sp.package_id
+        LEFT JOIN users t ON a.technician_id = t.user_id
+        ORDER BY a.appointment_date DESC
+        LIMIT 10";
+}
 
 // Execute query and store result
 try {
@@ -269,13 +323,23 @@ $technicians = $conn->query($technicians_sql);
         <div class="bg-white rounded-lg shadow-md p-6 mb-8">
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-xl font-semibold">Recent Appointments</h2>
-                <div class="flex space-x-2">
-                    <input type="text" placeholder="Search appointments..." 
+                <form method="GET" class="flex space-x-2">
+                    <input type="text" 
+                           name="search" 
+                           placeholder="Search by customer name, service..." 
+                           value="<?php echo isset($_GET['search']) ? htmlspecialchars($_GET['search']) : ''; ?>"
                            class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <button class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                    <button type="submit" 
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
                         <i class="fas fa-search mr-2"></i>Search
                     </button>
-                </div>
+                    <?php if(isset($_GET['search'])): ?>
+                        <a href="admin_dashboard.php" 
+                           class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors">
+                            Clear
+                        </a>
+                    <?php endif; ?>
+                </form>
             </div>
 
             <div class="overflow-x-auto">
@@ -318,20 +382,42 @@ $technicians = $conn->query($technicians_sql);
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         <?php echo date('M d, Y', strtotime($appointment['appointment_date'])); ?>
                                     </td>
+                                    <!-- Update the status cell in the appointments table -->
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                            <?php echo $appointment['status'] == 'completed' ? 'bg-green-100 text-green-800' : 
-                                                ($appointment['status'] == 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                                'bg-gray-100 text-gray-800'); ?>">
+                                            <?php 
+                                            switch($appointment['status']) {
+                                                case 'pending':
+                                                    echo 'bg-yellow-100 text-yellow-800';
+                                                    break;
+                                                case 'confirmed':
+                                                    echo 'bg-blue-100 text-blue-800';
+                                                    break;
+                                                case 'in-progress':
+                                                    echo 'bg-indigo-100 text-indigo-800';
+                                                    break;
+                                                case 'completed':
+                                                    echo 'bg-green-100 text-green-800';
+                                                    break;
+                                                case 'cancelled':
+                                                    echo 'bg-red-100 text-red-800';
+                                                    break;
+                                                default:
+                                                    echo 'bg-gray-100 text-gray-800';
+                                            }
+                                            ?>">
                                             <?php echo ucfirst($appointment['status']); ?>
                                         </span>
                                     </td>
+                                    <!-- Update the status update button in the table -->
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <button onclick="openUpdateModal(<?php echo $appointment['appointment_id']; ?>)"
+                                        <button onclick="openUpdateModal('<?php echo $appointment['appointment_id']; ?>', 
+                                                                       '<?php echo $appointment['status']; ?>', 
+                                                                       '<?php echo $appointment['technician_id']; ?>')"
                                                 class="text-blue-600 hover:text-blue-900 mr-2">
                                             <i class="fas fa-edit"></i> Update
                                         </button>
-                                        <button onclick="cancelAppointment(<?php echo $appointment['appointment_id']; ?>)"
+                                        <button onclick="confirmCancel(<?php echo $appointment['appointment_id']; ?>)"
                                                 class="text-red-600 hover:text-red-900">
                                             <i class="fas fa-times"></i> Cancel
                                         </button>
@@ -395,6 +481,66 @@ $technicians = $conn->query($technicians_sql);
         </div>
     </div>
 
+    <!-- Update the status modal HTML -->
+    <div id="updateStatusModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium text-gray-900">Update Appointment Status</h3>
+                <button onclick="closeModal('updateStatusModal')" class="text-gray-400 hover:text-gray-500">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="updateStatusForm" method="POST">
+                <input type="hidden" name="action" value="update_status">
+                <input type="hidden" name="appointment_id" id="modal_appointment_id">
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select name="status" id="modal_status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <option value="pending">Pending</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="in-progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Assign Technician</label>
+                    <select name="technician_id" id="modal_technician" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <option value="">Select Technician</option>
+                        <?php 
+                        $technicians->data_seek(0);
+                        while($tech = $technicians->fetch_assoc()): 
+                        ?>
+                            <option value="<?php echo $tech['user_id']; ?>">
+                                <?php echo htmlspecialchars($tech['first_name'] . ' ' . $tech['last_name']); ?>
+                            </option>
+                        <?php endwhile; ?>
+                    </select>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                    <textarea name="notes" id="modal_notes" rows="3" 
+                              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="closeModal('updateStatusModal')"
+                            class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        Update
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Add Cancel Confirmation Modal -->
     <div id="cancelModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
         <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
@@ -427,23 +573,33 @@ $technicians = $conn->query($technicians_sql);
     <!-- Add this JavaScript for modal handling -->
     <script>
     // Update modal handling functions
-    function openUpdateModal(appointmentId) {
+    function openUpdateModal(appointmentId, currentStatus, technicianId) {
+        // Set values in the modal
         document.getElementById('modal_appointment_id').value = appointmentId;
+        document.getElementById('modal_status').value = currentStatus;
+        if (technicianId) {
+            document.getElementById('modal_technician').value = technicianId;
+        }
+        
+        // Show the modal
         document.getElementById('updateStatusModal').classList.remove('hidden');
     }
 
-    function openCancelModal(appointmentId) {
-        document.getElementById('cancel_appointment_id').value = appointmentId;
-        document.getElementById('cancelModal').classList.remove('hidden');
+    function confirmCancel(appointmentId) {
+        if(confirm('Are you sure you want to cancel this appointment?')) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.innerHTML = `
+                <input type="hidden" name="action" value="cancel">
+                <input type="hidden" name="appointment_id" value="${appointmentId}">
+            `;
+            document.body.appendChild(form);
+            form.submit();
+        }
     }
 
     function closeModal(modalId) {
         document.getElementById(modalId).classList.add('hidden');
-    }
-
-    // Update click handlers
-    function cancelAppointment(appointmentId) {
-        openCancelModal(appointmentId);
     }
 
     // Close modals when clicking outside
@@ -456,6 +612,13 @@ $technicians = $conn->query($technicians_sql);
             }
         });
     }
+
+    // Add search functionality
+    document.querySelector('input[name="search"]').addEventListener('keyup', function(e) {
+        if (e.key === 'Enter') {
+            this.closest('form').submit();
+        }
+    });
     </script>
 
     <!-- Add to admin_dashboard.php before </body> -->
@@ -511,6 +674,15 @@ $technicians = $conn->query($technicians_sql);
 
     // Check for updates every 30 seconds
     setInterval(checkPaymentUpdates, 30000);
+    </script>
+
+    <!-- Add this JavaScript for real-time search (optional) -->
+    <script>
+    document.querySelector('input[name="search"]').addEventListener('keyup', function(e) {
+        if (e.key === 'Enter') {
+            this.closest('form').submit();
+        }
+    });
     </script>
 </body>
 </html>

@@ -48,11 +48,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['delete_service'])) {
 
 // Fetch service history with complete details
 $sql = "SELECT a.*, 
-        s.name as service_name, s.price,
+        COALESCE(s.name, sp.name) as service_name, 
+        COALESCE(s.price, sp.price) as price,
         v.make, v.model, v.year,
         u.first_name as tech_first_name, u.last_name as tech_last_name
         FROM appointments a 
-        JOIN services s ON a.service_id = s.service_id 
+        LEFT JOIN services s ON a.service_id = s.service_id 
+        LEFT JOIN service_packages sp ON a.package_id = sp.package_id
         JOIN vehicles v ON a.vehicle_id = v.vehicle_id
         LEFT JOIN users u ON a.technician_id = u.user_id
         WHERE a.user_id = ? 
