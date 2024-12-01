@@ -43,7 +43,7 @@ $appointment = $stmt->get_result()->fetch_assoc();
                 </div>
 
                 <!-- Payment Form -->
-                <form action="process_payment.php" method="POST" class="space-y-6"> <!-- Remove leading slash -->
+                <form action="./process_payment.php" method="POST" class="space-y-6"> <!-- Remove leading slash -->
                     <input type="hidden" name="appointment_id" value="<?php echo $appointment_id; ?>">
                     
                     <!-- Payment Method Selection -->

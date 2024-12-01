@@ -1,7 +1,12 @@
 <?php
-include 'includes/db.php';
-include 'includes/PaymentProcessor.php';
+require_once 'includes/db.php';
+require_once 'includes/PaymentProcessor.php';
 session_start();
+
+if (!isset($_SESSION['user_id'])) {
+    header('Location: login.php');
+    exit();
+}
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $appointment_id = $_POST['appointment_id'];
@@ -22,8 +27,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         // Process payment
         if (PaymentProcessor::processPayment($appointment_id, $appointment['price'], $payment_method, $user_id)) {
-            $_SESSION['success_message'] = "Payment processed successfully!";
-            header('Location: customer_dashboard.php');
+            $_SESSION['payment_success'] = true;
+            $_SESSION['appointment_details'] = $appointment;
+            header('Location: payment_confirmation.php');
             exit();
         }
     } catch (Exception $e) {
@@ -31,9 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         header('Location: payment.php?appointment_id=' . $appointment_id);
         exit();
     }
-} else {
-    // Invalid request method
-    header('Location: index.php');
-    exit();
 }
-?>
+
+header('Location: customer_dashboard.php');
+exit();

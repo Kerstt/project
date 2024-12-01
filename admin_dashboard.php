@@ -238,7 +238,7 @@ $technicians = $conn->query($technicians_sql);
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                         <?php while($appointment = $appointments->fetch_assoc()): ?>
-                            <tr class="hover:bg-gray-50">
+                            <tr class="hover:bg-gray-50" data-appointment-id="<?php echo $appointment['appointment_id']; ?>">
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="flex items-center">
                                         <div class="flex-shrink-0 h-10 w-10">
@@ -266,7 +266,7 @@ $technicians = $conn->query($technicians_sql);
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                    <span class="payment-status px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                                         <?php echo !$appointment['payment_status'] ? 'bg-red-100 text-red-800' : 
                                             ($appointment['payment_status'] == 'paid' ? 'bg-green-100 text-green-800' : 
                                             'bg-yellow-100 text-yellow-800'); ?>">
@@ -369,6 +369,41 @@ $technicians = $conn->query($technicians_sql);
 
     // Check for new payments every 30 seconds
     setInterval(checkNewPayments, 30000);
+    </script>
+
+    <!-- Add to admin_dashboard.php and technician_dashboard.php before </body> -->
+    <script>
+    // Real-time payment status updates
+    function checkPaymentUpdates() {
+        const appointmentElements = document.querySelectorAll('[data-appointment-id]');
+        const appointmentIds = Array.from(appointmentElements).map(el => el.dataset.appointmentId);
+        
+        fetch('check_payment_updates.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ appointment_ids: appointmentIds })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.updates) {
+                data.updates.forEach(update => {
+                    const element = document.querySelector(`[data-appointment-id="${update.appointment_id}"]`);
+                    if (element) {
+                        element.querySelector('.payment-status').className = 
+                            `payment-status px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                update.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                            }`;
+                        element.querySelector('.payment-status').textContent = update.payment_status;
+                    }
+                });
+            }
+        });
+    }
+
+    // Check for updates every 30 seconds
+    setInterval(checkPaymentUpdates, 30000);
     </script>
 </body>
 </html>
