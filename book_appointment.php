@@ -20,26 +20,63 @@ $result_vehicles = $stmt->get_result();
 $sql_services = "SELECT * FROM services";
 $result_services = $conn->query($sql_services);
 
+// Fetch service packages
+$sql_packages = "SELECT * FROM service_packages WHERE is_active = 1";
+$result_packages = $conn->query($sql_packages);
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $vehicle_id = $_POST['vehicle_id'];
-    $service_id = $_POST['service_id'];
     $appointment_date = $_POST['appointment_date'];
     $notes = $_POST['notes'];
-
-    // Fixed query using user_id instead of customer_id and prepared statement
-    $sql = "INSERT INTO appointments (user_id, vehicle_id, service_id, appointment_date, notes, status) 
-            VALUES (?, ?, ?, ?, ?, 'pending')";
-            
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("iiiss", $user_id, $vehicle_id, $service_id, $appointment_date, $notes);
     
-    if ($stmt->execute()) {
-        $appointment_id = $conn->insert_id;
-        // Redirect to payment page
-        header('Location: payment.php?appointment_id=' . $appointment_id);
-        exit();
-    } else {
-        $error = "Error booking appointment: " . $conn->error;
+    $conn->begin_transaction();
+    try {
+        if (isset($_POST['package_id']) && !empty($_POST['package_id'])) {
+            // Handle package booking
+            $package_id = $_POST['package_id'];
+            
+            // Get package details
+            $stmt = $conn->prepare("SELECT * FROM service_packages WHERE package_id = ?");
+            $stmt->bind_param("i", $package_id);
+            $stmt->execute();
+            $package = $stmt->get_result()->fetch_assoc();
+            
+            // Create appointment
+            $sql = "INSERT INTO appointments (user_id, vehicle_id, package_id, appointment_date, notes, status) 
+                    VALUES (?, ?, ?, ?, ?, 'pending')";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("iiiss", $user_id, $vehicle_id, $package_id, $appointment_date, $notes);
+            
+        } else {
+            // Handle single service booking
+            $service_id = $_POST['service_id'];
+            
+            $sql = "INSERT INTO appointments (user_id, vehicle_id, service_id, appointment_date, notes, status) 
+                    VALUES (?, ?, ?, ?, ?, 'pending')";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("iiiss", $user_id, $vehicle_id, $service_id, $appointment_date, $notes);
+        }
+        
+        if ($stmt->execute()) {
+            $appointment_id = $conn->insert_id;
+            
+            // Create notification for admin
+            $notify_sql = "INSERT INTO notifications (user_id, type, message, appointment_id) 
+                          SELECT user_id, 'new_appointment', 
+                          CONCAT('New appointment booking #', ?), ?
+                          FROM users WHERE role = 'admin'";
+            $notify_stmt = $conn->prepare($notify_sql);
+            $notify_stmt->bind_param("ii", $appointment_id, $appointment_id);
+            $notify_stmt->execute();
+            
+            $conn->commit();
+            $_SESSION['success_message'] = "Appointment booked successfully!";
+            header('Location: customer_dashboard.php');
+            exit();
+        }
+    } catch (Exception $e) {
+        $conn->rollback();
+        $error = "Error booking appointment: " . $e->getMessage();
     }
 }
 ?>
@@ -108,6 +145,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <?php endwhile; ?>
         </div>
 
+        <!-- Service Packages -->
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold text-white mb-4">Service Packages</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <?php while($package = $result_packages->fetch_assoc()): ?>
+                    <div class="bg-dark-gray rounded-lg p-6 shadow-lg border border-gray-700 hover:border-orange transition cursor-pointer package-card" 
+                         data-package-id="<?php echo $package['package_id']; ?>">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="text-xl font-semibold text-white mb-2"><?php echo htmlspecialchars($package['name']); ?></h3>
+                                <p class="text-gray-400 mb-4"><?php echo htmlspecialchars($package['description']); ?></p>
+                                <div class="mb-3">
+                                    <h4 class="text-sm font-medium text-gray-300">Included Services:</h4>
+                                    <ul class="list-disc list-inside text-gray-400 text-sm">
+                                        <?php foreach(explode(',', $package['included_services']) as $service): ?>
+                                            <li><?php echo htmlspecialchars($service); ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                                <span class="text-orange text-2xl font-bold">$<?php echo number_format($package['price'], 2); ?></span>
+                            </div>
+                            <i class="fas fa-box text-orange text-2xl"></i>
+                        </div>
+                    </div>
+                <?php endwhile; ?>
+            </div>
+        </div>
+
         <!-- Booking Form -->
         <div class="bg-dark-gray rounded-lg p-8 shadow-lg border border-gray-700">
             <form method="post" action="" class="space-y-6" id="bookingForm">
@@ -129,14 +194,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                     <!-- Date Time Selection -->
                     <div>
-                        <label class="block text-gray-300 mb-2">Preferred Date & Time</label>
-                        <input type="datetime-local" name="appointment_date" required
-                               class="w-full bg-gray-800 border border-gray-600 text-white rounded-lg px-4 py-2.5 focus:border-orange focus:ring-orange transition">
+                        <label class="block text-gray-300 mb-2">Appointment Date & Time</label>
+                        <input type="datetime-local" 
+                               id="appointment_datetime"
+                               name="appointment_date"
+                               class="w-full bg-gray-800 border border-gray-600 text-white rounded-lg px-4 py-2.5 focus:border-orange focus:ring-orange transition"
+                               required>
+                        <?php if(isset($error)): ?>
+                            <p class="text-red-500 text-sm mt-1"><?php echo $error; ?></p>
+                        <?php endif; ?>
                     </div>
                 </div>
 
                 <!-- Service Selection (Hidden) -->
                 <input type="hidden" name="service_id" id="selected_service_id" required>
+                <input type="hidden" name="package_id" id="selected_package_id">
 
                 <!-- Notes -->
                 <div>
@@ -167,31 +239,73 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Service card selection
         const serviceCards = document.querySelectorAll('.service-card');
+        const packageCards = document.querySelectorAll('.package-card');
         const serviceInput = document.getElementById('selected_service_id');
+        const packageInput = document.getElementById('selected_package_id');
 
+        // Service selection
         serviceCards.forEach(card => {
             card.addEventListener('click', function() {
-                // Remove active class from all cards
+                // Reset all cards
                 serviceCards.forEach(c => c.classList.remove('border-orange'));
-                // Add active class to selected card
+                packageCards.forEach(c => c.classList.remove('border-orange'));
+                
+                // Select this card
                 card.classList.add('border-orange');
-                // Update hidden input
+                
+                // Update inputs
                 serviceInput.value = card.dataset.serviceId;
+                packageInput.value = '';
+            });
+        });
+
+        // Package selection
+        packageCards.forEach(card => {
+            card.addEventListener('click', function() {
+                // Reset all cards
+                serviceCards.forEach(c => c.classList.remove('border-orange'));
+                packageCards.forEach(c => c.classList.remove('border-orange'));
+                
+                // Select this card
+                card.classList.add('border-orange');
+                
+                // Update inputs
+                packageInput.value = card.dataset.packageId;
+                serviceInput.value = '';
             });
         });
 
         // Form validation
         document.getElementById('bookingForm').addEventListener('submit', function(e) {
-            if (!serviceInput.value) {
+            if (!serviceInput.value && !packageInput.value) {
                 e.preventDefault();
-                alert('Please select a service');
+                alert('Please select a service or package');
             }
         });
-
-        // Date validation
+    });
+    </script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get datetime input
+        const datetimeInput = document.getElementById('appointment_datetime');
         
+        // Set minimum datetime to current time
+        const now = new Date();
+        now.setMinutes(now.getMinutes() + 1); // Add 1 minute to current time
+        const formattedNow = now.toISOString().slice(0, 16);
+        datetimeInput.min = formattedNow;
+        
+        // Form validation
+        document.getElementById('bookingForm').addEventListener('submit', function(e) {
+            const selectedDate = new Date(datetimeInput.value);
+            const currentDate = new Date();
+            
+            if (selectedDate <= currentDate) {
+                e.preventDefault();
+                alert('Please select a future date and time');
+            }
+        });
     });
     </script>
 </body>

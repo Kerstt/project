@@ -13,47 +13,71 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             case 'update_status':
                 $appointment_id = $_POST['appointment_id'];
                 $new_status = $_POST['status'];
+                $technician_id = $_POST['technician_id'] ?? null;
                 $notes = $_POST['notes'];
                 
-                // Begin transaction
                 $conn->begin_transaction();
                 try {
-                    // Get current status
-                    $stmt = $conn->prepare("SELECT status FROM appointments WHERE appointment_id = ?");
+                    // Get current appointment details including package info
+                    $stmt = $conn->prepare("
+                        SELECT a.*, 
+                               COALESCE(s.name, sp.name) as service_name,
+                               CASE WHEN a.package_id IS NOT NULL THEN 'package' ELSE 'service' END as booking_type
+                        FROM appointments a
+                        LEFT JOIN services s ON a.service_id = s.service_id
+                        LEFT JOIN service_packages sp ON a.package_id = sp.package_id
+                        WHERE a.appointment_id = ?
+                    ");
                     $stmt->bind_param("i", $appointment_id);
                     $stmt->execute();
-                    $old_status = $stmt->get_result()->fetch_assoc()['status'];
+                    $current = $stmt->get_result()->fetch_assoc();
                     
-                    // Update appointment status
-                    $stmt = $conn->prepare("UPDATE appointments SET status = ?, notes = CONCAT(IFNULL(notes,''), '\n', ?) WHERE appointment_id = ?");
-                    $stmt->bind_param("ssi", $new_status, $notes, $appointment_id);
+                    // Update appointment
+                    $stmt = $conn->prepare("
+                        UPDATE appointments 
+                        SET status = ?,
+                            technician_id = ?,
+                            notes = CONCAT(IFNULL(notes,''), '\n', ?),
+                            updated_at = NOW()
+                        WHERE appointment_id = ?
+                    ");
+                    $stmt->bind_param("sisi", $new_status, $technician_id, $notes, $appointment_id);
                     $stmt->execute();
                     
-                    // Log the change
-                    $stmt = $conn->prepare("INSERT INTO appointment_logs (appointment_id, status_from, status_to, notes, created_by) VALUES (?, ?, ?, ?, ?)");
-                    $stmt->bind_param("isssi", $appointment_id, $old_status, $new_status, $notes, $_SESSION['user_id']);
+                    // Create notification message
+                    $service_type = $current['booking_type'] == 'package' ? 'service package' : 'service';
+                    $message = "Your {$service_type} appointment for {$current['service_name']} has been updated to: " . $new_status;
+                    
+                    // Notify customer
+                    $stmt = $conn->prepare("
+                        INSERT INTO notifications (user_id, type, message, appointment_id) 
+                        VALUES (?, 'status_update', ?, ?)
+                    ");
+                    $stmt->bind_param("isi", $current['user_id'], $message, $appointment_id);
                     $stmt->execute();
                     
-                    // If status is completed and payment is pending, create payment record
-                    if ($new_status == 'completed') {
-                        $stmt = $conn->prepare("
-                            INSERT INTO payments (appointment_id, amount, status, payment_date)
-                            SELECT a.appointment_id, s.price, 'pending', NOW()
-                            FROM appointments a
-                            JOIN services s ON a.service_id = s.service_id
-                            WHERE a.appointment_id = ? AND NOT EXISTS (
-                                SELECT 1 FROM payments WHERE appointment_id = ?
-                            )
-                        ");
-                        $stmt->bind_param("ii", $appointment_id, $appointment_id);
+                    // Notify technician if assigned
+                    if ($technician_id && $technician_id != $current['technician_id']) {
+                        $tech_message = "You have been assigned to a new {$service_type} appointment #{$appointment_id}";
+                        $stmt->bind_param("isi", $technician_id, $tech_message, $appointment_id);
                         $stmt->execute();
                     }
                     
+                    // Log status change
+                    $stmt = $conn->prepare("
+                        INSERT INTO appointment_logs 
+                        (appointment_id, status_from, status_to, notes, created_by) 
+                        VALUES (?, ?, ?, ?, ?)
+                    ");
+                    $stmt->bind_param("isssi", $appointment_id, $current['status'], $new_status, $notes, $_SESSION['user_id']);
+                    $stmt->execute();
+                    
                     $conn->commit();
-                    $success_message = "Appointment updated successfully";
+                    $_SESSION['success_message'] = "Appointment updated successfully";
+                    
                 } catch (Exception $e) {
                     $conn->rollback();
-                    $error_message = "Error updating appointment: " . $e->getMessage();
+                    $_SESSION['error_message'] = "Error updating appointment: " . $e->getMessage();
                 }
                 break;
                 
@@ -67,6 +91,44 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $error_message = "Error cancelling appointment";
                 }
                 break;
+
+            case 'cancel':
+                $appointment_id = $_POST['appointment_id'];
+                
+                $conn->begin_transaction();
+                try {
+                    // Get current appointment details
+                    $stmt = $conn->prepare("SELECT status, user_id, technician_id FROM appointments WHERE appointment_id = ?");
+                    $stmt->bind_param("i", $appointment_id);
+                    $stmt->execute();
+                    $current = $stmt->get_result()->fetch_assoc();
+                    
+                    // Update appointment status
+                    $stmt = $conn->prepare("UPDATE appointments SET status = 'cancelled', updated_at = NOW() WHERE appointment_id = ?");
+                    $stmt->bind_param("i", $appointment_id);
+                    $stmt->execute();
+                    
+                    // Notify customer
+                    $notify_sql = "INSERT INTO notifications (user_id, type, message, appointment_id) VALUES (?, 'status_update', ?, ?)";
+                    $message = "Your appointment has been cancelled by admin";
+                    $stmt = $conn->prepare($notify_sql);
+                    $stmt->bind_param("isi", $current['user_id'], $message, $appointment_id);
+                    $stmt->execute();
+                    
+                    // Notify technician if assigned
+                    if ($current['technician_id']) {
+                        $tech_message = "Appointment #$appointment_id has been cancelled";
+                        $stmt->bind_param("isi", $current['technician_id'], $tech_message, $appointment_id);
+                        $stmt->execute();
+                    }
+                    
+                    $conn->commit();
+                    $_SESSION['success_message'] = "Appointment cancelled successfully";
+                } catch (Exception $e) {
+                    $conn->rollback();
+                    $_SESSION['error_message'] = "Error cancelling appointment: " . $e->getMessage();
+                }
+                break;
         }
     }
 }
@@ -75,33 +137,33 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 $stats_sql = "SELECT 
     (SELECT COUNT(*) FROM appointments WHERE status = 'pending') as pending_appointments,
     (SELECT COUNT(*) FROM appointments WHERE status = 'completed') as completed_appointments,
-    (SELECT COUNT(*) FROM users WHERE role = 'customer') as total_customers,
-    (SELECT SUM(amount) FROM payments WHERE status = 'paid') as total_revenue";
+    (SELECT COUNT(*) FROM users WHERE role = 'customer') as total_customers";
 $stats = $conn->query($stats_sql)->fetch_assoc();
 
-// Fetch recent appointments with pagination
-$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-$per_page = 10;
-$offset = ($page - 1) * $per_page;
-
+// Fetch recent appointments
 $appointments_sql = "
     SELECT a.*, 
-           u.first_name, u.last_name, 
-           s.name as service_name, s.price,
-           t.first_name as tech_first_name, t.last_name as tech_last_name,
-           p.status as payment_status, p.payment_method
+           u.first_name, u.last_name,
+           s.name as service_name,
+           s.price as service_price,
+           t.first_name as tech_first_name, t.last_name as tech_last_name
     FROM appointments a 
     JOIN users u ON a.user_id = u.user_id 
-    JOIN services s ON a.service_id = s.service_id 
+    LEFT JOIN services s ON a.service_id = s.service_id 
     LEFT JOIN users t ON a.technician_id = t.user_id
-    LEFT JOIN payments p ON a.appointment_id = p.appointment_id
     ORDER BY a.appointment_date DESC
-    LIMIT ? OFFSET ?";
-    
-$stmt = $conn->prepare($appointments_sql);
-$stmt->bind_param("ii", $per_page, $offset);
-$stmt->execute();
-$appointments = $stmt->get_result();
+    LIMIT 10";
+
+// Execute query and store result
+try {
+    $appointments = $conn->query($appointments_sql);
+    if (!$appointments) {
+        throw new Exception($conn->error);
+    }
+} catch (Exception $e) {
+    $_SESSION['error_message'] = "Error fetching appointments: " . $e->getMessage();
+    $appointments = null;
+}
 
 // Fetch available technicians
 $technicians_sql = "SELECT user_id, first_name, last_name FROM users WHERE role = 'technician'";
@@ -150,6 +212,9 @@ $technicians = $conn->query($technicians_sql);
                     <a href="notifications.php" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200">
                         <i class="fas fa-bell mr-2"></i>Notifications
                     </a>
+                    <a href="logout.php" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-red-600 transition-colors duration-200">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                    </a>
                     <div class="relative">
                         <button class="flex items-center space-x-2 text-gray-600 hover:text-blue-600">
                             <img src="https://ui-avatars.com/api/?name=Admin&background=2563eb&color=fff" class="h-8 w-8 rounded-full">
@@ -164,48 +229,37 @@ $technicians = $conn->query($technicians_sql);
     <!-- Main Content -->
     <div class="max-w-7xl mx-auto px-4 py-8">
         <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div class="stat-card bg-white rounded-lg shadow-md p-6 transition-all duration-300">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white rounded-lg shadow p-6 transition-transform duration-200 stat-card">
                 <div class="flex items-center">
                     <div class="p-3 bg-blue-100 rounded-full">
-                        <i class="fas fa-users text-blue-600"></i>
+                        <i class="fas fa-clock text-blue-600"></i>
                     </div>
                     <div class="ml-4">
-                        <p class="text-gray-500 text-sm">Total Users</p>
-                        <h3 class="text-2xl font-bold"><?php echo $stats['total_customers']; ?></h3>
+                        <h3 class="text-gray-500 text-sm">Pending Appointments</h3>
+                        <p class="text-2xl font-semibold"><?php echo $stats['pending_appointments']; ?></p>
                     </div>
                 </div>
             </div>
-            <div class="stat-card bg-white rounded-lg shadow-md p-6 transition-all duration-300">
+            <div class="bg-white rounded-lg shadow p-6 transition-transform duration-200 stat-card">
                 <div class="flex items-center">
                     <div class="p-3 bg-green-100 rounded-full">
-                        <i class="fas fa-calendar-check text-green-600"></i>
+                        <i class="fas fa-check-circle text-green-600"></i>
                     </div>
                     <div class="ml-4">
-                        <p class="text-gray-500 text-sm">Appointments</p>
-                        <h3 class="text-2xl font-bold"><?php echo $stats['pending_appointments']; ?></h3>
+                        <h3 class="text-gray-500 text-sm">Completed Services</h3>
+                        <p class="text-2xl font-semibold"><?php echo $stats['completed_appointments']; ?></p>
                     </div>
                 </div>
             </div>
-            <div class="stat-card bg-white rounded-lg shadow-md p-6 transition-all duration-300">
-                <div class="flex items-center">
-                    <div class="p-3 bg-yellow-100 rounded-full">
-                        <i class="fas fa-dollar-sign text-yellow-600"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-gray-500 text-sm">Revenue</p>
-                        <h3 class="text-2xl font-bold">$<?php echo number_format($stats['total_revenue'], 2); ?></h3>
-                    </div>
-                </div>
-            </div>
-            <div class="stat-card bg-white rounded-lg shadow-md p-6 transition-all duration-300">
+            <div class="bg-white rounded-lg shadow p-6 transition-transform duration-200 stat-card">
                 <div class="flex items-center">
                     <div class="p-3 bg-purple-100 rounded-full">
-                        <i class="fas fa-wrench text-purple-600"></i>
+                        <i class="fas fa-users text-purple-600"></i>
                     </div>
                     <div class="ml-4">
-                        <p class="text-gray-500 text-sm">Services</p>
-                        <h3 class="text-2xl font-bold"><?php echo $stats['completed_appointments']; ?></h3>
+                        <h3 class="text-gray-500 text-sm">Total Customers</h3>
+                        <p class="text-2xl font-semibold"><?php echo $stats['total_customers']; ?></p>
                     </div>
                 </div>
             </div>
@@ -225,75 +279,72 @@ $technicians = $conn->query($technicians_sql);
             </div>
 
             <div class="overflow-x-auto">
-                <table class="min-w-full">
-                    <thead class="bg-gray-50">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead>
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
-                        <?php while($appointment = $appointments->fetch_assoc()): ?>
-                            <tr class="hover:bg-gray-50" data-appointment-id="<?php echo $appointment['appointment_id']; ?>">
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="flex items-center">
-                                        <div class="flex-shrink-0 h-10 w-10">
-                                            <img class="h-10 w-10 rounded-full" src="https://ui-avatars.com/api/?name=<?php echo urlencode($appointment['first_name'] . ' ' . $appointment['last_name']); ?>&background=random" alt="">
-                                        </div>
-                                        <div class="ml-4">
-                                            <div class="text-sm font-medium text-gray-900">
-                                                <?php echo htmlspecialchars($appointment['first_name'] . ' ' . $appointment['last_name']); ?>
+                        <?php if ($appointments): ?>
+                            <?php while($appointment = $appointments->fetch_assoc()): ?>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="flex items-center">
+                                            <div class="flex-shrink-0 h-10 w-10">
+                                                <img class="h-10 w-10 rounded-full" 
+                                                     src="https://ui-avatars.com/api/?name=<?php echo urlencode($appointment['first_name'] . ' ' . $appointment['last_name']); ?>&background=random" 
+                                                     alt="">
+                                            </div>
+                                            <div class="ml-4">
+                                                <div class="text-sm font-medium text-gray-900">
+                                                    <?php echo htmlspecialchars($appointment['first_name'] . ' ' . $appointment['last_name']); ?>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <?php echo htmlspecialchars($appointment['service_name']); ?>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <?php echo date('M d, Y', strtotime($appointment['appointment_date'])); ?>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                        <?php echo $appointment['status'] == 'completed' ? 'bg-green-100 text-green-800' : 
-                                            ($appointment['status'] == 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                            'bg-gray-100 text-gray-800'); ?>">
-                                        <?php echo ucfirst($appointment['status']); ?>
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="payment-status px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                        <?php echo !$appointment['payment_status'] ? 'bg-red-100 text-red-800' : 
-                                            ($appointment['payment_status'] == 'paid' ? 'bg-green-100 text-green-800' : 
-                                            'bg-yellow-100 text-yellow-800'); ?>">
-                                        <?php echo $appointment['payment_status'] ? ucfirst($appointment['payment_status']) : 'Unpaid'; ?>
-                                    </span>
-                                    <?php if($appointment['payment_method']): ?>
-                                        <span class="ml-2 text-xs text-gray-500">
-                                            <i class="fas <?php echo $appointment['payment_method'] == 'credit_card' ? 'fa-credit-card' : 'fa-money-bill'; ?>"></i>
-                                            <?php echo ucfirst($appointment['payment_method']); ?>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm text-gray-900">
+                                            <?php echo htmlspecialchars($appointment['service_name']); ?>
+                                        </div>
+                                        <div class="text-sm text-gray-500">
+                                            $<?php echo number_format($appointment['service_price'], 2); ?>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <?php echo date('M d, Y', strtotime($appointment['appointment_date'])); ?>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                            <?php echo $appointment['status'] == 'completed' ? 'bg-green-100 text-green-800' : 
+                                                ($appointment['status'] == 'pending' ? 'bg-yellow-100 text-yellow-800' : 
+                                                'bg-gray-100 text-gray-800'); ?>">
+                                            <?php echo ucfirst($appointment['status']); ?>
                                         </span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <button onclick="openUpdateModal(<?php echo $appointment['appointment_id']; ?>)"
-                                            class="text-blue-600 hover:text-blue-900 mr-2">
-                                        <i class="fas fa-edit"></i> Update
-                                    </button>
-                                    <form method="POST" class="inline" onsubmit="return confirm('Are you sure you want to cancel this appointment?');">
-                                        <input type="hidden" name="action" value="delete">
-                                        <input type="hidden" name="appointment_id" value="<?php echo $appointment['appointment_id']; ?>">
-                                        <button type="submit" class="text-red-600 hover:text-red-900">
-                                            <i class="fas fa-trash"></i> Cancel
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button onclick="openUpdateModal(<?php echo $appointment['appointment_id']; ?>)"
+                                                class="text-blue-600 hover:text-blue-900 mr-2">
+                                            <i class="fas fa-edit"></i> Update
                                         </button>
-                                    </form>
+                                        <button onclick="cancelAppointment(<?php echo $appointment['appointment_id']; ?>)"
+                                                class="text-red-600 hover:text-red-900">
+                                            <i class="fas fa-times"></i> Cancel
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endwhile; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="6" class="px-6 py-4 text-center text-gray-500">
+                                    No appointments found or error loading appointments
                                 </td>
                             </tr>
-                        <?php endwhile; ?>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
@@ -323,6 +374,18 @@ $technicians = $conn->query($technicians_sql);
                     <textarea name="notes" class="shadow border rounded w-full py-2 px-3"></textarea>
                 </div>
                 
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Assign Technician</label>
+                    <select name="technician_id" class="shadow border rounded w-full py-2 px-3">
+                        <option value="">Select Technician</option>
+                        <?php while($tech = $technicians->fetch_assoc()): ?>
+                            <option value="<?php echo $tech['user_id']; ?>">
+                                <?php echo htmlspecialchars($tech['first_name'] . ' ' . $tech['last_name']); ?>
+                            </option>
+                        <?php endwhile; ?>
+                    </select>
+                </div>
+                
                 <div class="flex justify-end space-x-2">
                     <button type="button" onclick="closeModal('updateStatusModal')" 
                             class="bg-gray-500 text-white px-4 py-2 rounded">Cancel</button>
@@ -332,22 +395,66 @@ $technicians = $conn->query($technicians_sql);
         </div>
     </div>
 
+    <!-- Add Cancel Confirmation Modal -->
+    <div id="cancelModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                    <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900">Cancel Appointment</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-500">Are you sure you want to cancel this appointment?</p>
+                </div>
+                <form method="POST">
+                    <input type="hidden" name="action" value="cancel">
+                    <input type="hidden" name="appointment_id" id="cancel_appointment_id">
+                    <div class="flex justify-center space-x-4 mt-4">
+                        <button type="button" onclick="closeModal('cancelModal')"
+                                class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">
+                            No, Keep it
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                            Yes, Cancel it
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Add this JavaScript for modal handling -->
     <script>
+    // Update modal handling functions
     function openUpdateModal(appointmentId) {
         document.getElementById('modal_appointment_id').value = appointmentId;
         document.getElementById('updateStatusModal').classList.remove('hidden');
+    }
+
+    function openCancelModal(appointmentId) {
+        document.getElementById('cancel_appointment_id').value = appointmentId;
+        document.getElementById('cancelModal').classList.remove('hidden');
     }
 
     function closeModal(modalId) {
         document.getElementById(modalId).classList.add('hidden');
     }
 
-    // Close modal when clicking outside
+    // Update click handlers
+    function cancelAppointment(appointmentId) {
+        openCancelModal(appointmentId);
+    }
+
+    // Close modals when clicking outside
     window.onclick = function(event) {
-        if (event.target.classList.contains('modal-overlay')) {
-            closeModal('updateStatusModal');
-        }
+        const modals = ['updateStatusModal', 'cancelModal'];
+        modals.forEach(modalId => {
+            const modal = document.getElementById(modalId);
+            if (event.target === modal) {
+                closeModal(modalId);
+            }
+        });
     }
     </script>
 

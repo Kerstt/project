@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             </defs>
                             <path fill="url(#logoGradient)" d="M50 5 L90 25 L90 75 L50 95 L10 75 L10 25 Z"></path>
                         </svg>
-                        <span class="text-2xl font-bold text-orange-500">AutoBots</span>
+                        <span class="text-2xl font-bold text-white">AutoBots</span>
                     </a>
                     <h2 class="mt-6 text-3xl font-bold text-white">Create your account</h2>
                     <p class="mt-2 text-gray-400">Join AutoBots for premium car services</p>

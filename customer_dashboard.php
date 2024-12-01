@@ -79,7 +79,7 @@ $stats = $stmt->get_result()->fetch_assoc();
                         <span class="text-gray-700"><?php echo htmlspecialchars($user_data['first_name']); ?></span>
                     </a>
                     <a href="logout.php" class="text-red-600 hover:text-red-700">
-                        <i class="fas fa-sign-out-alt"></i>
+                        <i class="fas fa-sign-out-alt"></i> Logout
                     </a>
                 </div>
             </div>
@@ -146,40 +146,33 @@ $stats = $stmt->get_result()->fetch_assoc();
                     <?php if ($result_appointments->num_rows > 0): ?>
                         <div class="space-y-4">
                             <?php while($appointment = $result_appointments->fetch_assoc()): ?>
-                                <div class="border rounded-lg p-4 hover:border-blue-500 transition">
-                                    <div class="flex items-start justify-between">
-                                        <div class="flex items-start space-x-4">
-                                            <div class="p-2 bg-blue-100 rounded-lg">
-                                                <img src="https://cdn-icons-png.flaticon.com/512/4635/4635595.png" 
-                                                     alt="Service" class="w-12 h-12">
-                                            </div>
-                                            <div>
-                                                <h3 class="font-semibold"><?php echo htmlspecialchars($appointment['service_name']); ?></h3>
-                                                <p class="text-sm text-gray-600">
-                                                    <i class="far fa-calendar mr-1"></i>
-                                                    <?php echo date('M d, Y - h:i A', strtotime($appointment['appointment_date'])); ?>
-                                                </p>
-                                                <p class="text-sm text-gray-600">
-                                                    <i class="fas fa-car mr-1"></i>
-                                                    <?php echo htmlspecialchars($appointment['make'] . ' ' . $appointment['model']); ?>
-                                                </p>
-                                                <?php if ($appointment['tech_first_name']): ?>
-                                                    <p class="text-sm text-gray-600">
-                                                        <i class="fas fa-user-md mr-1"></i>
-                                                        Technician: <?php echo htmlspecialchars($appointment['tech_first_name'] . ' ' . $appointment['tech_last_name']); ?>
-                                                    </p>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                        <div class="text-right">
-                                            <span class="px-3 py-1 rounded-full text-sm 
+                                <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <h3 class="text-lg font-semibold"><?php echo htmlspecialchars($appointment['service_name']); ?></h3>
+                                            <p class="text-gray-600">
+                                                <?php echo date('F j, Y g:i A', strtotime($appointment['appointment_date'])); ?>
+                                            </p>
+                                            <span class="inline-block mt-2 px-3 py-1 rounded-full text-sm
                                                 <?php echo $appointment['status'] == 'pending' ? 'bg-yellow-100 text-yellow-800' : 
                                                     ($appointment['status'] == 'completed' ? 'bg-green-100 text-green-800' : 
                                                     'bg-blue-100 text-blue-800'); ?>">
                                                 <?php echo ucfirst($appointment['status']); ?>
                                             </span>
-                                            <p class="mt-2 font-semibold">$<?php echo number_format($appointment['price'], 2); ?></p>
                                         </div>
+                                        
+                                        <?php if ($appointment['status'] != 'completed' && $appointment['status'] != 'cancelled'): ?>
+                                            <div class="space-x-2">
+                                                <button onclick="openRescheduleModal(<?php echo $appointment['appointment_id']; ?>)"
+                                                        class="text-blue-600 hover:text-blue-800">
+                                                    <i class="fas fa-calendar-alt"></i> Reschedule
+                                                </button>
+                                                <button onclick="confirmCancel(<?php echo $appointment['appointment_id']; ?>)"
+                                                        class="text-red-600 hover:text-red-800">
+                                                    <i class="fas fa-times"></i> Cancel
+                                                </button>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                             <?php endwhile; ?>
@@ -283,6 +276,94 @@ $stats = $stmt->get_result()->fetch_assoc();
             </div>
         </div>
     </div>
+
+    <!-- Add Reschedule Modal -->
+    <div id="rescheduleModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">Reschedule Appointment</h3>
+                <form id="rescheduleForm" action="update_appointment.php" method="POST">
+                    <input type="hidden" name="action" value="reschedule">
+                    <input type="hidden" name="appointment_id" id="reschedule_appointment_id">
+                    
+                    <div class="mt-4">
+                        <input type="datetime-local" 
+                               name="new_date"
+                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                               required>
+                    </div>
+                    
+                    <div class="mt-5 flex justify-center space-x-4">
+                        <button type="button" 
+                                onclick="document.getElementById('rescheduleModal').classList.add('hidden')"
+                                class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                            Confirm
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add JavaScript for modal handling -->
+    <script>
+    function openRescheduleModal(appointmentId) {
+        document.getElementById('reschedule_appointment_id').value = appointmentId;
+        document.getElementById('rescheduleModal').classList.remove('hidden');
+        
+        // Set minimum date to tomorrow
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setMinutes(tomorrow.getMinutes() - tomorrow.getTimezoneOffset());
+        document.querySelector('input[type="datetime-local"]').min = tomorrow.toISOString().slice(0, 16);
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).classList.add('hidden');
+    }
+
+    function confirmCancel(appointmentId) {
+        if (confirm('Are you sure you want to cancel this appointment?')) {
+            // Create and submit form
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'update_appointment.php';
+            
+            const actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'action';
+            actionInput.value = 'cancel';
+            
+            const appointmentInput = document.createElement('input');
+            appointmentInput.type = 'hidden';
+            appointmentInput.name = 'appointment_id';
+            appointmentInput.value = appointmentId;
+            
+            form.appendChild(actionInput);
+            form.appendChild(appointmentInput);
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+
+    // Add to all dashboard pages
+    function checkAppointmentUpdates() {
+        fetch('check_updates.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.updates) {
+                    location.reload();
+                }
+            });
+    }
+
+    // Check for updates every 30 seconds
+    setInterval(checkAppointmentUpdates, 30000);
+    </script>
 
     <!-- Footer -->
     <footer class="bg-white border-t mt-8">
