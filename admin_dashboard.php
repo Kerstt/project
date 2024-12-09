@@ -1,10 +1,40 @@
 <?php
+// At the very top of admin_dashboard.php
+// Start session handling
+ini_set('session.gc_maxlifetime', 86400); // 24 hours
+ini_set('session.cookie_lifetime', 86400);
+
+session_start();
 include 'includes/db.php';
 include 'includes/auth_middleware.php';
-session_start();
 
 // Check admin authentication
-checkAdminAuth();
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'admin') {
+    header('Location: login.php');
+    exit();
+}
+
+// Refresh session timestamp
+$_SESSION['last_activity'] = time();
+
+// Session timeout check - 24 hours
+if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 86400)) {
+    session_unset();
+    session_destroy();
+    header('Location: login.php');
+    exit();
+}
+
+$user_id = $_SESSION['user_id'];
+
+// Fetch admin data
+$user_sql = "SELECT * FROM users WHERE user_id = ? AND role = 'admin'";
+$stmt = $conn->prepare($user_sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$user_data = $stmt->get_result()->fetch_assoc();
+
+// Rest of your existing code...
 
 // Add search functionality
 if (isset($_GET['search'])) {
@@ -233,12 +263,14 @@ $technicians = $conn->query($technicians_sql);
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
         .stat-card:hover { transform: translateY(-5px); }
         .nav-link.active { color: #2563eb; border-bottom: 2px solid #2563eb; }
+        [x-cloak] { display: none !important; }
     </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-gray-50" x-data="{ showLogoutModal: false }">
     <!-- Navigation -->
     <nav class="bg-white shadow-lg sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4">
@@ -250,6 +282,7 @@ $technicians = $conn->query($technicians_sql);
                     </a>
                 </div>
                 
+                <!-- Replace the existing navigation menu buttons with this -->
                 <div class="hidden md:flex items-center space-x-4">
                     <a href="admin_dashboard.php" class="nav-link active px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">
                         <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
@@ -266,14 +299,46 @@ $technicians = $conn->query($technicians_sql);
                     <a href="notifications.php" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200">
                         <i class="fas fa-bell mr-2"></i>Notifications
                     </a>
-                    <a href="logout.php" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-red-600 transition-colors duration-200">
-                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                    </a>
-                    <div class="relative">
-                        <button class="flex items-center space-x-2 text-gray-600 hover:text-blue-600">
-                            <img src="https://ui-avatars.com/api/?name=Admin&background=2563eb&color=fff" class="h-8 w-8 rounded-full">
-                            <span>Admin</span>
+                    
+                    <!-- Profile Dropdown -->
+                    <div class="relative" x-data="{ profileOpen: false }">
+                        <button @click="profileOpen = !profileOpen" 
+                                class="flex items-center space-x-3 text-gray-600 hover:text-blue-600 focus:outline-none"
+                                type="button">
+                            <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($user_data['first_name'] . ' ' . $user_data['last_name']); ?>&background=2563eb&color=fff" 
+                                 class="h-8 w-8 rounded-full">
+                            <span class="text-sm font-medium"><?php echo htmlspecialchars($user_data['first_name']); ?></span>
+                            <svg class="w-4 h-4" :class="{'rotate-180': profileOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
                         </button>
+
+                        <div x-show="profileOpen"
+                             x-cloak
+                             @click.away="profileOpen = false"
+                             x-transition:enter="transition ease-out duration-100"
+                             x-transition:enter-start="transform opacity-0 scale-95"
+                             x-transition:enter-end="transform opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-75"
+                             x-transition:leave-start="transform opacity-100 scale-100"
+                             x-transition:leave-end="transform opacity-0 scale-95"
+                             class="absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-50">
+                            
+                            <div class="px-4 py-2 border-b">
+                                <p class="text-sm text-gray-700 font-medium">
+                                    <?php echo htmlspecialchars($user_data['first_name'] . ' ' . $user_data['last_name']); ?>
+                                </p>
+                                <p class="text-xs text-gray-500"><?php echo htmlspecialchars($user_data['email']); ?></p>
+                            </div>
+                            
+                            <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-user-circle mr-2"></i>My Profile
+                            </a>
+                            <button @click="showLogoutModal = true; profileOpen = false" 
+                                    class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
+                                <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -684,5 +749,47 @@ $technicians = $conn->query($technicians_sql);
         }
     });
     </script>
+
+    <!-- Logout Modal -->
+    <div x-show="showLogoutModal"
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         aria-labelledby="modal-title" 
+         role="dialog" 
+         aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <!-- Background overlay -->
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+                 @click="showLogoutModal = false"></div>
+
+            <!-- Modal panel -->
+            <div class="relative inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                            <i class="fas fa-sign-out-alt text-red-600"></i>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900">Confirm Logout</h3>
+                            <div class="mt-2">
+                                <p class="text-sm text-gray-500">Are you sure you want to logout?</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <a href="logout.php" 
+                       class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        Confirm Logout
+                    </a>
+                    <button type="button" 
+                            @click="showLogoutModal = false"
+                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

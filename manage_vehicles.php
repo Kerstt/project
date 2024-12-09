@@ -9,6 +9,43 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
+// Fetch user data
+$user_sql = "SELECT * FROM users WHERE user_id = ?";
+$stmt = $conn->prepare($user_sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$user_data = $stmt->get_result()->fetch_assoc();
+
+// Fetch vehicles
+$vehicles_sql = "SELECT * FROM vehicles WHERE user_id = ?";
+$stmt = $conn->prepare($vehicles_sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$vehicles = $stmt->get_result();
+
+// Update the stats section to use proper error handling
+$stats = [
+    'total_vehicles' => 0,
+    'total_services' => 0
+];
+
+$stats_sql = "SELECT 
+    COUNT(*) as total_vehicles,
+    SUM(CASE WHEN EXISTS (
+        SELECT 1 FROM appointments WHERE vehicle_id = v.vehicle_id
+    ) THEN 1 ELSE 0 END) as total_services
+    FROM vehicles v 
+    WHERE user_id = ?";
+
+$stmt = $conn->prepare($stats_sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$stats_result = $stmt->get_result()->fetch_assoc();
+
+if ($stats_result) {
+    $stats = $stats_result;
+}
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['action'])) {
         switch ($_POST['action']) {
@@ -124,212 +161,238 @@ $stats = $stmt->get_result()->fetch_assoc();
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Vehicles - AutoBots</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        .vehicle-card { transition: all 0.3s ease; }
         .vehicle-card:hover { transform: translateY(-5px); }
-        .glass-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
+        .animate-fade { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .glass-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        }
-        .vehicle-image {
-            transition: transform 0.3s ease;
-        }
-        .glass-card:hover .vehicle-image {
-            transform: scale(1.05);
-        }
-        .status-badge {
-            transition: all 0.3s ease;
-        }
-        .glass-card:hover .status-badge {
-            transform: translateX(5px);
-        }
+        .modal-transition { transition: all 0.3s ease-out; }
+        [x-cloak] { display: none !important; }
     </style>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body class="bg-gray-50">
-    <!-- Hero Section -->
-    <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white">
-        <div class="max-w-7xl mx-auto px-4 py-12">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-bold mb-2">My Vehicles</h1>
-                    <p class="text-blue-100">Manage and track your vehicle fleet</p>
-                </div>
-                <button onclick="document.getElementById('addVehicleModal').classList.remove('hidden')"
-                        class="bg-white text-blue-600 px-6 py-2 rounded-lg hover:bg-blue-50 transition">
-                    <i class="fas fa-plus mr-2"></i>Add Vehicle
-                </button>
-            </div>
-            
-            <!-- Stats Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-                <div class="bg-white/10 backdrop-blur rounded-lg p-6">
-                    <div class="flex items-center">
-                        <i class="fas fa-car text-3xl mr-4"></i>
-                        <div>
-                            <p class="text-sm text-blue-100">Total Vehicles</p>
-                            <h3 class="text-2xl font-bold"><?php echo $stats['total_vehicles']; ?></h3>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-white/10 backdrop-blur rounded-lg p-6">
-                    <div class="flex items-center">
-                        <i class="fas fa-wrench text-3xl mr-4"></i>
-                        <div>
-                            <p class="text-sm text-blue-100">Total Services</p>
-                            <h3 class="text-2xl font-bold"><?php echo $stats['total_services']; ?></h3>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-white/10 backdrop-blur rounded-lg p-6">
-                    <a href="book_appointment.php" class="flex items-center text-white hover:text-blue-100">
-                        <i class="fas fa-calendar-plus text-3xl mr-4"></i>
-                        <div>
-                            <p class="text-sm text-blue-100">Quick Action</p>
-                            <h3 class="text-lg font-bold">Book Service</h3>
-                        </div>
+<body class="bg-gray-900 text-gray-100">
+    <!-- Replace the existing navigation in manage_vehicles.php -->
+    <nav class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo and Brand -->
+                <div class="flex items-center">
+                    <a href="customer_dashboard.php" class="flex items-center">
+                        <i class="fas fa-car text-orange-500 text-2xl"></i>
+                        <span class="ml-2 text-xl font-bold text-white">AutoBots</span>
                     </a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Add this right after the hero section -->
-    <?php if (isset($_SESSION['success_message'])): ?>
-        <div class="max-w-7xl mx-auto px-4 mt-4">
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert">
-                <?php 
-                    echo $_SESSION['success_message'];
-                    unset($_SESSION['success_message']);
-                ?>
-            </div>
-        </div>
-    <?php endif; ?>
-
-    <?php if (isset($_SESSION['error_message'])): ?>
-        <div class="max-w-7xl mx-auto px-4 mt-4">
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-                <?php 
-                    echo $_SESSION['error_message'];
-                    unset($_SESSION['error_message']);
-                ?>
-            </div>
-        </div>
-    <?php endif; ?>
-
-    <!-- Vehicles Grid -->
-    <div class="max-w-7xl mx-auto px-4 py-12">
-        <?php if ($result->num_rows > 0): ?>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <?php while($vehicle = $result->fetch_assoc()): ?>
-                    <div class="glass-card rounded-xl overflow-hidden">
-                        <div class="relative h-56 overflow-hidden bg-gradient-to-br from-blue-50 to-gray-50">
-                            <img src="https://cdn.imagin.studio/getimage/?customer=img&make=<?php echo urlencode($vehicle['make']); ?>&modelYear=<?php echo $vehicle['year']; ?>&angle=23" 
-                                 alt="<?php echo htmlspecialchars($vehicle['make']); ?>"
-                                 class="vehicle-image w-full h-full object-cover">
-                            <div class="absolute top-4 right-4">
-                                <span class="status-badge bg-white/90 backdrop-blur px-4 py-1 rounded-full text-sm font-medium text-gray-700 shadow-sm">
-                                    <?php echo htmlspecialchars($vehicle['license_plate']); ?>
-                                </span>
-                            </div>
+                    
+                    <!-- Main Navigation -->
+                    <div class="hidden md:block ml-10">
+                        <div class="flex items-center space-x-4">
+                            <a href="customer_dashboard.php" 
+                               class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                                <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                            </a>
+                            <a href="book_appointment.php" 
+                               class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                                <i class="fas fa-calendar-plus mr-2"></i>Book Service
+                            </a>
+                            <a href="manage_vehicles.php" 
+                               class="text-white px-3 py-2 rounded-md text-sm font-medium bg-gray-700">
+                                <i class="fas fa-car mr-2"></i>My Vehicles
+                            </a>
+                            <a href="service_history.php" 
+                               class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                                <i class="fas fa-history mr-2"></i>Service History
+                            </a>
                         </div>
-                        <div class="p-6">
-                            <div class="flex justify-between items-start mb-4">
-                                <div>
-                                    <h3 class="text-xl font-semibold text-gray-900">
-                                        <?php echo htmlspecialchars($vehicle['make'] . ' ' . $vehicle['model']); ?>
-                                    </h3>
-                                    <p class="text-gray-500 mt-1"><?php echo htmlspecialchars($vehicle['year']); ?></p>
-                                </div>
-                                <div class="flex space-x-2">
-                                    <?php if ($vehicle['service_count'] > 0): ?>
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                            <?php echo $vehicle['service_count']; ?> Services
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
+                    </div>
+                </div>
+
+                <!-- Right Side Menu -->
+                <div class="hidden md:flex items-center">
+                    <div x-data="{ profileOpen: false }" @click.away="profileOpen = false" class="relative">
+                        <button @click="profileOpen = !profileOpen" 
+                                class="flex items-center space-x-3 text-gray-300 hover:text-white focus:outline-none"
+                                type="button">
+                            <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($user_data['first_name'] . ' ' . $user_data['last_name']); ?>&background=F97316&color=fff" 
+                                 class="h-8 w-8 rounded-full">
+                            <span class="text-sm font-medium"><?php echo htmlspecialchars($user_data['first_name']); ?></span>
+                            <svg class="w-4 h-4 ml-1" :class="{'rotate-180': profileOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+
+                        <div x-show="profileOpen"
+                             x-cloak
+                             x-transition:enter="transition ease-out duration-100"
+                             x-transition:enter-start="transform opacity-0 scale-95"
+                             x-transition:enter-end="transform opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-75"
+                             x-transition:leave-start="transform opacity-100 scale-100"
+                             x-transition:leave-end="transform opacity-0 scale-95"
+                             class="absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-50">
+                            
+                            <div class="px-4 py-2 border-b">
+                                <p class="text-sm text-gray-700 font-medium">
+                                    <?php echo htmlspecialchars($user_data['first_name'] . ' ' . $user_data['last_name']); ?>
+                                </p>
+                                <p class="text-xs text-gray-500"><?php echo htmlspecialchars($user_data['email']); ?></p>
                             </div>
                             
-                            <div class="flex items-center text-sm text-gray-500 mb-6">
-                                <i class="fas fa-calendar-alt mr-2"></i>
-                                <?php echo $vehicle['last_service'] ? 'Last service: ' . date('M d, Y', strtotime($vehicle['last_service'])) : 'No service history'; ?>
-                            </div>
-
-                            <div class="flex items-center space-x-3">
-                                <a href="vehicle_details.php?id=<?php echo $vehicle['vehicle_id']; ?>" 
-                                   class="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 text-center">
-                                    View Details
-                                </a>
-                                <button class="p-2 text-gray-500 hover:text-blue-600 transition-colors"
-                                        onclick='editVehicle(<?php echo json_encode($vehicle); ?>)'>
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="p-2 text-gray-500 hover:text-red-600 transition-colors"
-                                        onclick="deleteVehicle(<?php echo $vehicle['vehicle_id']; ?>)">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>
-                            </div>
+                            <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-user-circle mr-2"></i>My Profile
+                            </a>
+                            <button @click="$root.showLogoutModal = true; profileOpen = false" 
+                                    class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
+                                <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                            </button>
                         </div>
                     </div>
-                <?php endwhile; ?>
+                </div>
+
+                <!-- Mobile menu button -->
+                <div class="md:hidden flex items-center">
+                    <button type="button" 
+                            class="mobile-menu-button inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none"
+                            aria-controls="mobile-menu" 
+                            aria-expanded="false">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                </div>
             </div>
-        <?php endif; ?>
+        </div>
+
+        <!-- Mobile menu -->
+        <div class="md:hidden hidden" id="mobile-menu">
+            <div class="px-2 pt-2 pb-3 space-y-1">
+                <a href="customer_dashboard.php" class="text-gray-300 hover:bg-gray-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
+                    <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                </a>
+                <a href="book_appointment.php" class="text-gray-300 hover:bg-gray-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
+                    <i class="fas fa-calendar-plus mr-2"></i>Book Service
+                </a>
+                <a href="manage_vehicles.php" class="bg-gray-700 text-white block px-3 py-2 rounded-md text-base font-medium">
+                    <i class="fas fa-car mr-2"></i>My Vehicles
+                </a>
+                <a href="service_history.php" class="text-gray-300 hover:bg-gray-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
+                    <i class="fas fa-history mr-2"></i>Service History
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Add mobile menu script -->
+    <script>
+    // Toggle mobile menu
+    document.querySelector('.mobile-menu-button').addEventListener('click', function() {
+        document.getElementById('mobile-menu').classList.toggle('hidden');
+    });
+    </script>
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Stats Section -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-gray-800 rounded-lg p-6 shadow-lg transition-transform duration-200 hover:transform hover:scale-105">
+                <div class="flex items-center">
+                    <div class="p-3 bg-orange-500/10 rounded-full">
+                        <i class="fas fa-car text-orange-500 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-gray-400">Total Vehicles</p>
+                        <h3 class="text-2xl font-bold"><?php echo $vehicles ? $vehicles->num_rows : 0; ?></h3>
+                    </div>
+                </div>
+            </div>
+            <!-- Add more stat cards as needed -->
+        </div>
+
+        <!-- Vehicles Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <?php while($vehicle = $result->fetch_assoc()): ?>
+                <div class="bg-gray-800 rounded-lg p-6 shadow-lg vehicle-card transition-all duration-300 animate-fade">
+                    <div class="relative h-40 mb-4 rounded-lg overflow-hidden bg-gray-700">
+                        <img src="https://cdn.imagin.studio/getimage/?customer=img&make=<?php echo urlencode($vehicle['make']); ?>&modelYear=<?php echo $vehicle['year']; ?>" 
+                             class="w-full h-full object-cover" alt="Vehicle Image">
+                        <div class="absolute top-3 right-3">
+                            <span class="bg-gray-900/70 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">
+                                <?php echo htmlspecialchars($vehicle['license_plate']); ?>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="text-xl font-semibold">
+                                <?php echo htmlspecialchars($vehicle['make'] . ' ' . $vehicle['model']); ?>
+                            </h3>
+                            <p class="text-gray-400"><?php echo htmlspecialchars($vehicle['year']); ?></p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="editVehicle(<?php echo htmlspecialchars(json_encode($vehicle)); ?>)"
+                                    class="text-blue-500 hover:text-blue-400 transition-colors">
+                                <i class="fas fa-edit text-lg"></i>
+                            </button>
+                            <button onclick="deleteVehicle(<?php echo $vehicle['vehicle_id']; ?>)"
+                                    class="text-red-500 hover:text-red-400 transition-colors">
+                                <i class="fas fa-trash text-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            <?php endwhile; ?>
+        </div>
     </div>
 
     <!-- Add Vehicle Modal -->
     <div id="addVehicleModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50">
         <div class="min-h-screen flex items-center justify-center p-4">
-            <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
-                <div class="p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xl font-semibold">Add New Vehicle</h3>
-                        <button onclick="closeModal('addVehicleModal')"
-                                class="text-gray-400 hover:text-gray-500">
-                            <i class="fas fa-times"></i>
+            <div class="bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 modal-transition">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold">Add New Vehicle</h3>
+                    <button onclick="closeModal('addVehicleModal')" class="text-gray-400 hover:text-gray-300">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form method="POST" class="space-y-4">
+                    <input type="hidden" name="action" value="add">
+                    
+                    <div>
+                        <label class="block text-gray-300 mb-2">Make</label>
+                        <input type="text" name="make" required 
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-300 mb-2">Model</label>
+                        <input type="text" name="model" required 
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-300 mb-2">Year</label>
+                        <input type="number" name="year" required min="1900" max="<?php echo date('Y') + 1; ?>"
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-300 mb-2">License Plate</label>
+                        <input type="text" name="license_plate" required 
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white">
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeModal('addVehicleModal')"
+                                class="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600">
+                            Add Vehicle
                         </button>
                     </div>
-                    <form method="POST" action="manage_vehicles.php" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Make</label>
-                            <input type="text" name="make" required 
-                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Model</label>
-                            <input type="text" name="model" required 
-                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Year</label>
-                            <input type="number" name="year" required 
-                                   min="1900" max="<?php echo date('Y') + 1; ?>" 
-                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">License Plate</label>
-                            <input type="text" name="license_plate" required 
-                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                        </div>
-                        <div class="flex justify-end space-x-3 mt-6">
-                            <button type="button" onclick="closeModal('addVehicleModal')"
-                                    class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
-                                Cancel
-                            </button>
-                            <button type="submit"
-                                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                                Add Vehicle
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                </form>
             </div>
         </div>
     </div>

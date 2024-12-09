@@ -3,10 +3,27 @@ include 'includes/db.php';
 session_start();
 
 // Check if user is admin
-if ($_SESSION['role'] != 'admin') {
-    header('Location: index.php');
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'admin') {
+    header('Location: login.php');
     exit();
 }
+
+$user_id = $_SESSION['user_id'];
+
+// Fetch admin data
+$user_sql = "SELECT * FROM users WHERE user_id = ? AND role = 'admin'";
+$stmt = $conn->prepare($user_sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$user_data = $stmt->get_result()->fetch_assoc();
+
+if (!$user_data) {
+    session_destroy();
+    header('Location: login.php');
+    exit();
+}
+
+// Rest of your existing code...
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $conn->begin_transaction();
@@ -151,11 +168,83 @@ $packages = $conn->query($packages_sql);
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Manage Services - AutoBots</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Services - AutoBots Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        .nav-link.active { color: #2563eb; border-bottom: 2px solid #2563eb; }
+        [x-cloak] { display: none !important; }
+    </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-50" x-data="{ showLogoutModal: false }">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a href="index.php" class="flex items-center space-x-2">
+                        <i class="fas fa-car text-blue-600 text-2xl"></i>
+                        <span class="text-xl font-bold">AutoBots Admin</span>
+                    </a>
+                </div>
+
+                <!-- Navigation Links -->
+                <div class="hidden md:flex items-center space-x-4">
+                    <a href="admin_dashboard.php" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
+                        <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                    </a>
+                    <a href="manage_users.php" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
+                        <i class="fas fa-users mr-2"></i>Users
+                    </a>
+                    <a href="manage_appointments.php" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
+                        <i class="fas fa-calendar-alt mr-2"></i>Appointments
+                    </a>
+                    <a href="manage_services.php" class="nav-link active px-3 py-2 rounded-md text-sm font-medium text-blue-600">
+                        <i class="fas fa-wrench mr-2"></i>Services
+                    </a>
+                    <a href="notifications.php" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
+                        <i class="fas fa-bell mr-2"></i>Notifications
+                    </a>
+
+                    <!-- Profile Dropdown -->
+                    <div class="relative" x-data="{ profileOpen: false }">
+                        <button @click="profileOpen = !profileOpen" 
+                                class="flex items-center space-x-3 text-gray-600 hover:text-blue-600 focus:outline-none">
+                            <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($user_data['first_name'] . ' ' . $user_data['last_name']); ?>&background=2563eb&color=fff" 
+                                 class="h-8 w-8 rounded-full">
+                            <span class="text-sm font-medium"><?php echo htmlspecialchars($user_data['first_name']); ?></span>
+                            <svg class="w-4 h-4" :class="{'rotate-180': profileOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+
+                        <div x-show="profileOpen"
+                             x-cloak
+                             @click.away="profileOpen = false"
+                             class="absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-50">
+                            <div class="px-4 py-2 border-b">
+                                <p class="text-sm text-gray-700 font-medium">
+                                    <?php echo htmlspecialchars($user_data['first_name'] . ' ' . $user_data['last_name']); ?>
+                                </p>
+                                <p class="text-xs text-gray-500"><?php echo htmlspecialchars($user_data['email']); ?></p>
+                            </div>
+                            
+                            <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-user-circle mr-2"></i>My Profile
+                            </a>
+                            <button @click="showLogoutModal = true; profileOpen = false" 
+                                    class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
+                                <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
     <div class="container mx-auto p-4">
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-2xl font-bold">Manage Services</h1>
@@ -407,105 +496,46 @@ $packages = $conn->query($packages_sql);
         </div>
     </div>
 
-    <script>
-    function openAddModal() {
-        document.getElementById('modalTitle').textContent = 'Add New Service';
-        document.getElementById('formAction').value = 'add';
-        document.getElementById('serviceId').value = '';
-        document.getElementById('serviceName').value = '';
-        document.getElementById('serviceDescription').value = '';
-        document.getElementById('servicePrice').value = '';
-        document.getElementById('serviceModal').classList.remove('hidden');
-    }
+    <!-- Logout Modal -->
+    <div x-show="showLogoutModal"
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         aria-labelledby="modal-title" 
+         role="dialog" 
+         aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <!-- Background overlay -->
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+                 @click="showLogoutModal = false"></div>
 
-    function openEditModal(service) {
-        document.getElementById('modalTitle').textContent = 'Edit Service';
-        document.getElementById('formAction').value = 'edit';
-        document.getElementById('serviceId').value = service.service_id;
-        document.getElementById('serviceName').value = service.name;
-        document.getElementById('serviceDescription').value = service.description;
-        document.getElementById('servicePrice').value = service.price;
-        document.getElementById('serviceModal').classList.remove('hidden');
-    }
-
-    function closeModal() {
-        document.getElementById('serviceModal').classList.add('hidden');
-    }
-
-    function confirmDelete(serviceId) {
-        document.getElementById('deleteServiceId').value = serviceId;
-        document.getElementById('deleteModal').classList.remove('hidden');
-    }
-
-    function closeDeleteModal() {
-        document.getElementById('deleteModal').classList.add('hidden');
-    }
-
-    // Close modals when clicking outside
-    window.onclick = function(event) {
-        const serviceModal = document.getElementById('serviceModal');
-        const deleteModal = document.getElementById('deleteModal');
-        if (event.target === serviceModal) {
-            closeModal();
-        }
-        if (event.target === deleteModal) {
-            closeDeleteModal();
-        }
-    }
-
-    function switchTab(tabName) {
-        // Update tab buttons
-        document.getElementById('servicesTab').classList.remove('border-blue-600');
-        document.getElementById('packagesTab').classList.remove('border-blue-600');
-        document.getElementById(tabName + 'Tab').classList.add('border-blue-600');
-
-        // Update content visibility
-        document.getElementById('servicesContent').classList.add('hidden');
-        document.getElementById('packagesContent').classList.add('hidden');
-        document.getElementById(tabName + 'Content').classList.remove('hidden');
-    }
-
-    // Add these JavaScript functions
-    function openAddPackageModal() {
-        document.getElementById('packageModalTitle').textContent = 'Add New Package';
-        document.getElementById('packageFormAction').value = 'add_package';
-        document.getElementById('packageId').value = '';
-        document.getElementById('packageName').value = '';
-        document.getElementById('packageDescription').value = '';
-        document.getElementById('packagePrice').value = '';
-        document.getElementById('packageDuration').value = '';
-        document.getElementById('packageServices').value = '';
-        document.getElementById('packageModal').classList.remove('hidden');
-    }
-
-    function openEditPackageModal(package) {
-        document.getElementById('packageModalTitle').textContent = 'Edit Package';
-        document.getElementById('packageFormAction').value = 'edit_package';
-        document.getElementById('packageId').value = package.package_id;
-        document.getElementById('packageName').value = package.name;
-        document.getElementById('packageDescription').value = package.description;
-        document.getElementById('packagePrice').value = package.price;
-        document.getElementById('packageDuration').value = package.duration_minutes;
-        document.getElementById('packageServices').value = package.included_services;
-        document.getElementById('packageModal').classList.remove('hidden');
-    }
-
-    function closePackageModal() {
-        document.getElementById('packageModal').classList.add('hidden');
-    }
-
-    function confirmDeletePackage(packageId) {
-        if(confirm('Are you sure you want to delete this package?')) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.innerHTML = `
-                <input type="hidden" name="action" value="delete_package">
-                <input type="hidden" name="package_id" value="${packageId}">
-            `;
-            document.body.appendChild(form);
-            form.submit();
-        }
-    }
-    </script>
+            <!-- Modal panel -->
+            <div class="relative inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                            <i class="fas fa-sign-out-alt text-red-600"></i>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900">Confirm Logout</h3>
+                            <div class="mt-2">
+                                <p class="text-sm text-gray-500">Are you sure you want to logout?</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <a href="logout.php" 
+                       class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        Confirm Logout
+                    </a>
+                    <button type="button" 
+                            @click="showLogoutModal = false"
+                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

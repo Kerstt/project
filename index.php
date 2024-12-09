@@ -268,7 +268,6 @@ require_once 'includes/db.php';
         <div class="container mx-auto px-4">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <div>
-                    <img src="https://cdn-icons-png.flaticon.com/512/744/744465.png" alt="AutoBots Logo" class="h-12 w-12 mb-4">
                     <p>Professional auto service you can trust.</p>
                 </div>
                 <div>

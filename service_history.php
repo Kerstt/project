@@ -73,34 +73,62 @@ $services = $stmt->get_result();
     <title>Service History - AutoBots</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .animate-fade { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .table-row-hover:hover { background-color: rgba(31, 41, 55, 0.4); }
+    </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-gray-900 text-gray-100">
     <!-- Navigation -->
-    <nav class="bg-white shadow-lg">
+    <nav class="bg-gray-800 border-b border-gray-700">
         <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between h-16">
+            <div class="flex items-center justify-between h-16">
                 <div class="flex items-center">
-                    <a href="index.php" class="flex items-center space-x-2">
-                        <img src="https://cdn-icons-png.flaticon.com/512/1785/1785210.png" alt="AutoBots Logo" class="h-8 w-8">
-                        <span class="text-xl font-bold text-gray-800">AutoBots</span>
+                    <a href="customer_dashboard.php" class="flex items-center">
+                        <i class="fas fa-car text-orange-500 text-2xl"></i>
+                        <span class="ml-2 text-xl font-bold text-white">AutoBots</span>
                     </a>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <a href="customer_dashboard.php" class="text-gray-600 hover:text-gray-900">
-                        <i class="fas fa-tachometer-alt mr-1"></i> Dashboard
-                    </a>
-                    <a href="logout.php" class="text-red-600 hover:text-red-700">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </a>
+                    
+                    <!-- Main Navigation -->
+                    <div class="hidden md:block ml-10">
+                        <div class="flex items-center space-x-4">
+                            <a href="customer_dashboard.php" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                                <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                            </a>
+                            <a href="book_appointment.php" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                                <i class="fas fa-calendar-plus mr-2"></i>Book Service
+                            </a>
+                            <a href="manage_vehicles.php" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                                <i class="fas fa-car mr-2"></i>My Vehicles
+                            </a>
+                            <a href="service_history.php" class="text-white bg-gray-700 px-3 py-2 rounded-md text-sm font-medium">
+                                <i class="fas fa-history mr-2"></i>Service History
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </nav>
 
     <div class="max-w-7xl mx-auto px-4 py-8">
-        <div class="mb-6">
-            <h1 class="text-2xl font-bold text-gray-900">Service History</h1>
-            <p class="text-gray-600">View all your past services</p>
+        <!-- Page Header -->
+        <div class="bg-gradient-to-r from-gray-800 to-gray-900 rounded-lg shadow-lg p-6 mb-8 animate-fade">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold text-white">Service History</h1>
+                    <p class="mt-1 text-gray-400">View and manage your service records</p>
+                </div>
+                <a href="book_appointment.php" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors">
+                    <i class="fas fa-plus mr-2"></i>Book New Service
+                </a>
+            </div>
         </div>
 
         <?php if (isset($_SESSION['success_message'])): ?>
@@ -122,125 +150,109 @@ $services = $stmt->get_result();
         <?php endif; ?>
 
         <?php if ($services->num_rows > 0): ?>
-            <div class="bg-white shadow-md rounded-lg overflow-hidden">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vehicle</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Technician</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        <?php while($service = $services->fetch_assoc()): ?>
+            <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-700">
+                        <thead class="bg-gray-700">
                             <tr>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars($service['service_name']); ?></div>
-                                    <div class="text-sm text-gray-500">$<?php echo number_format($service['price'], 2); ?></div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm text-gray-900">
-                                        <?php echo htmlspecialchars($service['make'] . ' ' . $service['model']); ?>
-                                    </div>
-                                    <div class="text-sm text-gray-500">Year: <?php echo htmlspecialchars($service['year']); ?></div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <?php echo date('M d, Y h:i A', strtotime($service['appointment_date'])); ?>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <?php 
-                                    echo $service['tech_first_name'] ? 
-                                        htmlspecialchars($service['tech_first_name'] . ' ' . $service['tech_last_name']) : 
-                                        'Not assigned';
-                                    ?>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                                        <?php echo $service['status'] == 'completed' ? 'bg-green-100 text-green-800' : 
-                                            ($service['status'] == 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                            'bg-blue-100 text-blue-800'); ?>">
-                                        <?php echo ucfirst($service['status']); ?>
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <button onclick="confirmDelete(<?php echo $service['appointment_id']; ?>)" 
-                                            class="text-red-600 hover:text-red-900 focus:outline-none">
-                                        <i class="fas fa-trash-alt mr-1"></i> Delete
-                                    </button>
-                                </td>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Service</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Vehicle</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Technician</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
                             </tr>
-                        <?php endwhile; ?>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody class="divide-y divide-gray-700">
+                            <?php while($service = $services->fetch_assoc()): ?>
+                                <tr class="table-row-hover transition-colors">
+                                    <td class="px-6 py-4">
+                                        <div class="text-sm font-medium text-white"><?php echo htmlspecialchars($service['service_name']); ?></div>
+                                        <div class="text-sm text-gray-400">$<?php echo number_format($service['price'], 2); ?></div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="text-sm text-white">
+                                            <?php echo htmlspecialchars($service['make'] . ' ' . $service['model']); ?>
+                                        </div>
+                                        <div class="text-sm text-gray-400">Year: <?php echo htmlspecialchars($service['year']); ?></div>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm text-gray-400">
+                                        <?php echo date('M d, Y h:i A', strtotime($service['appointment_date'])); ?>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm text-gray-400">
+                                        <?php 
+                                        echo $service['tech_first_name'] ? 
+                                            htmlspecialchars($service['tech_first_name'] . ' ' . $service['tech_last_name']) : 
+                                            '<span class="text-gray-500">Not assigned</span>';
+                                        ?>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full
+                                            <?php echo $service['status'] == 'completed' ? 'bg-green-100 text-green-800' : 
+                                                ($service['status'] == 'pending' ? 'bg-yellow-100 text-yellow-800' : 
+                                                'bg-blue-100 text-blue-800'); ?>">
+                                            <?php echo ucfirst($service['status']); ?>
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm font-medium">
+                                        <button onclick="confirmDelete(<?php echo $service['appointment_id']; ?>)"
+                                                class="text-red-400 hover:text-red-500 transition-colors">
+                                            <i class="fas fa-trash-alt mr-1"></i> Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         <?php else: ?>
-            <div class="text-center py-8">
+            <div class="bg-gray-800 rounded-lg shadow-lg p-8 text-center">
                 <img src="https://cdn-icons-png.flaticon.com/512/6598/6598519.png" 
                      alt="No service history" class="w-24 h-24 mx-auto mb-4 opacity-50">
-                <p class="text-gray-500">No service history found</p>
-                <a href="book_appointment.php" class="mt-4 inline-block text-blue-600 hover:text-blue-700">
-                    Book your first service →
+                <p class="text-gray-400 mb-4">No service history found</p>
+                <a href="book_appointment.php" 
+                   class="inline-flex items-center px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors">
+                    <i class="fas fa-calendar-plus mr-2"></i>
+                    Book Your First Service
                 </a>
             </div>
         <?php endif; ?>
     </div>
 
-    <!-- Add Delete Confirmation Modal -->
-    <div id="deleteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
-        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div class="mt-3 text-center">
-                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-                    <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
-                </div>
-                <h3 class="text-lg font-medium text-gray-900 mb-4">Delete Service Record</h3>
-                <div class="mt-2 px-7 py-3">
-                    <p class="text-sm text-gray-500">
-                        Are you sure you want to delete this service record? This action cannot be undone.
-                    </p>
-                </div>
-                <form action="service_history.php" method="POST">
-                    <input type="hidden" name="delete_service" value="1">
-                    <input type="hidden" name="service_id" id="delete_service_id">
-                    <div class="flex justify-center space-x-4 mt-4">
-                        <button type="button" 
-                                onclick="closeDeleteModal()"
-                                class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition">
-                            Cancel
-                        </button>
-                        <button type="submit"
-                                class="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition">
-                            Delete
-                        </button>
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" x-data="{ show: false }" 
+         x-show="show" 
+         x-cloak
+         @keydown.escape.window="show = false"
+         class="fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity" @click="show = false"></div>
+            <div class="relative inline-block align-bottom bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                            <i class="fas fa-exclamation-triangle text-red-600"></i>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                            <h3 class="text-lg leading-6 font-medium text-white">Delete Service Record</h3>
+                            <div class="mt-2">
+                                <p class="text-sm text-gray-400">Are you sure you want to delete this service record? This action cannot be undone.</p>
+                            </div>
+                        </div>
                     </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div id="deleteConfirmModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div class="mt-3 text-center">
-                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-                    <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
                 </div>
-                <h3 class="text-lg font-medium text-gray-900 mb-4">Delete Service Record</h3>
-                <div class="mt-2 px-7 py-3">
-                    <p class="text-sm text-gray-500">Are you sure you want to delete this service record? This action cannot be undone.</p>
-                </div>
-                <div class="mt-4">
+                <div class="bg-gray-800 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                     <form method="POST">
                         <input type="hidden" name="delete_service" value="1">
                         <input type="hidden" name="service_id" id="serviceIdToDelete">
-                        <button type="button" onclick="closeDeleteModal()" 
-                                class="inline-block bg-gray-200 text-gray-700 px-4 py-2 rounded-md mr-2 hover:bg-gray-300">
-                            Cancel
-                        </button>
-                        <button type="submit" 
-                                class="inline-block bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600">
+                        <button type="submit"
+                                class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
                             Delete
+                        </button>
+                        <button type="button" @click="show = false"
+                                class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-700 text-base font-medium text-gray-300 hover:bg-gray-600 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            Cancel
                         </button>
                     </form>
                 </div>

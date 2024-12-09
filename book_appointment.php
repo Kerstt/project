@@ -9,6 +9,12 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'customer') {
 
 $user_id = $_SESSION['user_id'];
 
+$user_sql = "SELECT * FROM users WHERE user_id = ?";
+$stmt = $conn->prepare($user_sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$user_data = $stmt->get_result()->fetch_assoc();
+
 // Fetch vehicles using prepared statement
 $sql_vehicles = "SELECT * FROM vehicles WHERE user_id = ?";
 $stmt = $conn->prepare($sql_vehicles);
@@ -108,38 +114,120 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        [x-cloak] { display: none !important; }
         .bg-dark-gray { background-color: #1F2937; }
         .bg-orange { background-color: #F97316; }
         .text-orange { color: #F97316; }
         .border-orange { border-color: #F97316; }
         .hover-orange:hover { background-color: #EA580C; }
     </style>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-100">
-    <!-- Navigation -->
-    <nav class="bg-dark-gray shadow-lg">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <a href="index.php" class="flex items-center space-x-2">
-                        <i class="fas fa-car text-orange text-2xl"></i>
-                        <span class="text-xl font-bold text-white">AutoBots</span>
-                    </a>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <a href="customer_dashboard.php" class="text-gray-300 hover:text-orange transition">
-                        <i class="fas fa-tachometer-alt mr-1"></i> Dashboard
-                    </a>
-                    <a href="profile.php" class="text-gray-300 hover:text-orange transition">
-                        <i class="fas fa-user mr-1"></i> Profile
-                    </a>
-                    <a href="logout.php" class="text-gray-300 hover:text-orange transition">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </a>
+    <div x-data="{ showLogoutModal: false, isOpen: false }">
+        <!-- Navigation -->
+        <nav class="bg-gray-800 border-b border-gray-700">
+    <div class="max-w-7xl mx-auto px-4">
+        <div class="flex items-center justify-between h-16">
+            <!-- Logo and Brand -->
+            <div class="flex items-center">
+                <a href="customer_dashboard.php" class="flex items-center">
+                    <i class="fas fa-car text-orange-500 text-2xl"></i>
+                    <span class="ml-2 text-xl font-bold text-white">AutoBots</span>
+                </a>
+                
+                <!-- Main Navigation -->
+                <div class="hidden md:block ml-10">
+                    <div class="flex items-center space-x-4">
+                        <a href="customer_dashboard.php" 
+                           class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                        </a>
+                        <a href="book_appointment.php" 
+                               class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                                <i class="fas fa-calendar-plus mr-2"></i>Book Service
+                            </a>
+                        <a href="manage_vehicles.php" 
+                           class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-car mr-2"></i>My Vehicles
+                        </a>
+                        <a href="service_history.php" 
+                           class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-history mr-2"></i>Service History
+                        </a>
+                    </div>
                 </div>
             </div>
+
+            <!-- Right Side Menu -->
+            <div class="hidden md:flex items-center">
+                <div x-data="{ isOpen: false }" @click.away="isOpen = false" class="relative">
+                    <button @click="isOpen = !isOpen" 
+                            class="flex items-center space-x-3 text-gray-300 hover:text-white focus:outline-none"
+                            type="button">
+                        <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($user_data['first_name'] . ' ' . $user_data['last_name']); ?>&background=F97316&color=fff" 
+                             class="h-8 w-8 rounded-full">
+                        <span class="text-sm font-medium"><?php echo htmlspecialchars($user_data['first_name']); ?></span>
+                        <svg class="w-4 h-4 ml-1" :class="{'rotate-180': isOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+
+                    <div x-show="isOpen"
+                         x-cloak
+                         x-transition:enter="transition ease-out duration-100"
+                         x-transition:enter-start="transform opacity-0 scale-95"
+                         x-transition:enter-end="transform opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-75"
+                         x-transition:leave-start="transform opacity-100 scale-100"
+                         x-transition:leave-end="transform opacity-0 scale-95"
+                         class="absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-50">
+                        
+                        <div class="px-4 py-2 border-b">
+                            <p class="text-sm text-gray-700 font-medium">
+                                <?php echo htmlspecialchars($user_data['first_name'] . ' ' . $user_data['last_name']); ?>
+                            </p>
+                            <p class="text-xs text-gray-500"><?php echo htmlspecialchars($user_data['email']); ?></p>
+                        </div>
+                        
+                        <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                            <i class="fas fa-user-circle mr-2"></i>My Profile
+                        </a>
+                        <button @click="$parent.showLogoutModal = true; isOpen = false" 
+                                class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
+                            <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile menu button -->
+            <div class="md:hidden flex items-center">
+                <button type="button" 
+                        class="mobile-menu-button inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none"
+                        aria-controls="mobile-menu" 
+                        aria-expanded="false">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
         </div>
-    </nav>
+    </div>
+
+    <!-- Mobile menu -->
+    <div class="md:hidden hidden" id="mobile-menu">
+        <div class="px-2 pt-2 pb-3 space-y-1">
+            <a href="customer_dashboard.php" class="text-gray-300 hover:bg-gray-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
+                <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+            </a>
+            <a href="manage_vehicles.php" class="text-gray-300 hover:bg-gray-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
+                <i class="fas fa-car mr-2"></i>My Vehicles
+            </a>
+            <a href="service_history.php" class="text-gray-300 hover:bg-gray-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
+                <i class="fas fa-history mr-2"></i>Service History
+            </a>
+        </div>
+    </div>
+</nav>
 
     <div class="max-w-7xl mx-auto p-6">
         <div class="mb-8">
@@ -327,5 +415,44 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         });
     });
     </script>
+    <div x-show="showLogoutModal"
+         x-cloak
+         @keydown.escape.window="showLogoutModal = false"
+         class="fixed inset-0 z-50 overflow-y-auto"
+         aria-labelledby="modal-title" 
+         role="dialog" 
+         aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+                 @click="showLogoutModal = false"></div>
+
+            <div class="relative inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                            <i class="fas fa-sign-out-alt text-red-600"></i>
+                        </div>
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                            <h3 class="text-lg font-medium text-gray-900">Confirm Logout</h3>
+                            <div class="mt-2">
+                                <p class="text-sm text-gray-500">Are you sure you want to logout?</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <a href="logout.php" 
+                       class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        Confirm Logout
+                    </a>
+                    <button type="button" 
+                            @click="showLogoutModal = false"
+                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
