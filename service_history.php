@@ -13,35 +13,55 @@ $user_id = $_SESSION['user_id'];
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['delete_service'])) {
     $service_id = $_POST['service_id'];
     
+    // Start transaction
     $conn->begin_transaction();
+    
     try {
-        // First verify the service belongs to user and is completed
+        // First verify the service belongs to user
         $check_sql = "SELECT * FROM appointments WHERE appointment_id = ? AND user_id = ?";
         $stmt = $conn->prepare($check_sql);
         $stmt->bind_param("ii", $service_id, $user_id);
         $stmt->execute();
         $result = $stmt->get_result();
         
-        if ($result->num_rows === 0) {
-            throw new Exception("Service record not found");
+        if ($result->num_rows > 0) {
+            // 1. First delete appointment_logs
+            $delete_logs_sql = "DELETE FROM appointment_logs WHERE appointment_id = ?";
+            $stmt = $conn->prepare($delete_logs_sql);
+            $stmt->bind_param("i", $service_id);
+            $stmt->execute();
+            
+            // 2. Delete any status_history records if they exist
+            $delete_history_sql = "DELETE FROM appointment_status_history WHERE appointment_id = ?";
+            $stmt = $conn->prepare($delete_history_sql);
+            $stmt->bind_param("i", $service_id);
+            $stmt->execute();
+            
+            // 3. Delete any notifications
+            $delete_notifications_sql = "DELETE FROM notifications WHERE appointment_id = ?";
+            $stmt = $conn->prepare($delete_notifications_sql);
+            $stmt->bind_param("i", $service_id);
+            $stmt->execute();
+            
+            // 4. Finally delete the appointment
+            $delete_appointment_sql = "DELETE FROM appointments WHERE appointment_id = ? AND user_id = ?";
+            $stmt = $conn->prepare($delete_appointment_sql);
+            $stmt->bind_param("ii", $service_id, $user_id);
+            $stmt->execute();
+            
+            // Commit transaction
+            $conn->commit();
+            $_SESSION['success'] = "Service record deleted successfully";
+        } else {
+            $_SESSION['error'] = "Invalid service record";
         }
-        
-        // Delete the service record
-        $delete_sql = "DELETE FROM appointments WHERE appointment_id = ? AND user_id = ?";
-        $stmt = $conn->prepare($delete_sql);
-        $stmt->bind_param("ii", $service_id, $user_id);
-        
-        if (!$stmt->execute()) {
-            throw new Exception("Failed to delete service record");
-        }
-        
-        $conn->commit();
-        $_SESSION['success_message'] = "Service record deleted successfully";
     } catch (Exception $e) {
+        // Rollback on error
         $conn->rollback();
-        $_SESSION['error_message'] = $e->getMessage();
+        $_SESSION['error'] = "Error deleting service record: " . $e->getMessage();
     }
     
+    // Redirect back to service history
     header('Location: service_history.php');
     exit();
 }
@@ -109,6 +129,9 @@ $services = $stmt->get_result();
                             </a>
                             <a href="service_history.php" class="text-white bg-gray-700 px-3 py-2 rounded-md text-sm font-medium">
                                 <i class="fas fa-history mr-2"></i>Service History
+                            </a>
+                            <a href="customer_manage_appointments.php" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-calendar-alt mr-2"></i>Manage Appointments
                             </a>
                         </div>
                     </div>
@@ -220,14 +243,11 @@ $services = $stmt->get_result();
         <?php endif; ?>
     </div>
 
-    <!-- Delete Confirmation Modal -->
-    <div id="deleteModal" x-data="{ show: false }" 
-         x-show="show" 
-         x-cloak
-         @keydown.escape.window="show = false"
-         class="fixed inset-0 z-50 overflow-y-auto">
+    <!-- Replace the Delete Modal HTML with this simplified version -->
+    <div id="deleteModal" 
+         class="fixed inset-0 z-50 overflow-y-auto hidden"
+         style="background-color: rgba(0, 0, 0, 0.5);">
         <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity" @click="show = false"></div>
             <div class="relative inline-block align-bottom bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
                 <div class="bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <div class="sm:flex sm:items-start">
@@ -243,14 +263,15 @@ $services = $stmt->get_result();
                     </div>
                 </div>
                 <div class="bg-gray-800 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                    <form method="POST">
+                    <form method="POST" id="deleteForm">
                         <input type="hidden" name="delete_service" value="1">
-                        <input type="hidden" name="service_id" id="serviceIdToDelete">
+                        <input type="hidden" name="service_id" id="delete_service_id">
                         <button type="submit"
                                 class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
                             Delete
                         </button>
-                        <button type="button" @click="show = false"
+                        <button type="button" 
+                                onclick="closeDeleteModal()"
                                 class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-700 text-base font-medium text-gray-300 hover:bg-gray-600 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
                             Cancel
                         </button>
@@ -260,19 +281,15 @@ $services = $stmt->get_result();
         </div>
     </div>
 
+    <!-- Replace the JavaScript with this updated version -->
     <script>
-    function showDeleteModal(serviceId) {
+    function confirmDelete(serviceId) {
         document.getElementById('delete_service_id').value = serviceId;
         document.getElementById('deleteModal').classList.remove('hidden');
     }
 
     function closeDeleteModal() {
         document.getElementById('deleteModal').classList.add('hidden');
-    }
-
-    function confirmDelete(serviceId) {
-        document.getElementById('serviceIdToDelete').value = serviceId;
-        document.getElementById('deleteConfirmModal').classList.remove('hidden');
     }
 
     // Close modal when clicking outside
@@ -282,14 +299,6 @@ $services = $stmt->get_result();
             closeDeleteModal();
         }
     });
-
-    // Close modal when clicking outside
-    window.onclick = function(event) {
-        const modal = document.getElementById('deleteConfirmModal');
-        if (event.target === modal) {
-            closeDeleteModal();
-        }
-    }
 
     // Add escape key listener
     document.addEventListener('keydown', function(event) {
@@ -304,6 +313,7 @@ $services = $stmt->get_result();
         messages.forEach(message => {
             setTimeout(() => {
                 message.style.opacity = '0';
+                message.style.transition = 'opacity 0.5s';
                 setTimeout(() => message.remove(), 500);
             }, 3000);
         });

@@ -396,26 +396,113 @@ $role_counts = $conn->query("
         </div>
     </div>
 
-    <!-- Edit User Modal -->
-    <div id="editUserModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div class="mt-3">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-medium text-gray-900">Edit User</h3>
-                    <button onclick="closeModal('editUserModal')" class="text-gray-400 hover:text-gray-500">
-                        <i class="fas fa-times"></i>
+    <!-- Replace the Edit User Modal section with this improved version -->
+<div id="editUserModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium text-gray-900">Edit User</h3>
+                <button onclick="closeModal('editUserModal')" class="text-gray-400 hover:text-gray-500">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form method="POST" action="process_user.php" class="space-y-4">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="user_id" id="edit_user_id">
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">First Name</label>
+                    <input type="text" name="first_name" id="edit_first_name" required 
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Last Name</label>
+                    <input type="text" name="last_name" id="edit_last_name" required 
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Email</label>
+                    <input type="email" name="email" id="edit_email" required 
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Phone Number</label>
+                    <input type="tel" name="phone_number" id="edit_phone_number" required 
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Role</label>
+                    <select name="role" id="edit_role" required 
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <option value="customer">Customer</option>
+                        <option value="technician">Technician</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">
+                        New Password (leave blank to keep current)
+                    </label>
+                    <input type="password" name="password" id="edit_password"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="closeModal('editUserModal')"
+                            class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        Save Changes
                     </button>
                 </div>
-                <form method="POST" action="process_user.php" class="space-y-4">
-                    <input type="hidden" name="action" value="edit">
-                    <input type="hidden" name="user_id" id="edit_user_id">
-                    
-                    <!-- Same form fields as Add User Modal but with id prefix "edit_" -->
-                    <!-- Will be populated by JavaScript -->
-                </form>
-            </div>
+            </form>
         </div>
     </div>
+</div>
+
+<!-- Update the JavaScript for openEditModal function -->
+<script>
+function openEditModal(user) {
+    // Set form values
+    document.getElementById('edit_user_id').value = user.user_id;
+    document.getElementById('edit_first_name').value = user.first_name;
+    document.getElementById('edit_last_name').value = user.last_name;
+    document.getElementById('edit_email').value = user.email;
+    document.getElementById('edit_phone_number').value = user.phone_number;
+    document.getElementById('edit_role').value = user.role;
+    document.getElementById('edit_password').value = ''; // Clear password field
+    
+    // Show modal
+    document.getElementById('editUserModal').classList.remove('hidden');
+}
+
+// Add form validation
+document.querySelector('#editUserModal form').addEventListener('submit', function(e) {
+    const email = document.getElementById('edit_email').value;
+    const phone = document.getElementById('edit_phone_number').value;
+    
+    // Basic email validation
+    if (!email.includes('@')) {
+        e.preventDefault();
+        alert('Please enter a valid email address');
+        return;
+    }
+    
+    // Basic phone validation
+    if (!/^\d{10,}$/.test(phone.replace(/\D/g,''))) {
+        e.preventDefault();
+        alert('Please enter a valid phone number');
+        return;
+    }
+});
+</script>
 
     <!-- Delete Confirmation Modal -->
     <div id="deleteModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -495,14 +582,38 @@ function openAddModal() {
 }
 
 function openEditModal(user) {
+    // Set form values
     document.getElementById('edit_user_id').value = user.user_id;
     document.getElementById('edit_first_name').value = user.first_name;
     document.getElementById('edit_last_name').value = user.last_name;
     document.getElementById('edit_email').value = user.email;
     document.getElementById('edit_phone_number').value = user.phone_number;
     document.getElementById('edit_role').value = user.role;
+    document.getElementById('edit_password').value = ''; // Clear password field
+    
+    // Show modal
     document.getElementById('editUserModal').classList.remove('hidden');
 }
+
+// Add form validation
+document.querySelector('#editUserModal form').addEventListener('submit', function(e) {
+    const email = document.getElementById('edit_email').value;
+    const phone = document.getElementById('edit_phone_number').value;
+    
+    // Basic email validation
+    if (!email.includes('@')) {
+        e.preventDefault();
+        alert('Please enter a valid email address');
+        return;
+    }
+    
+    // Basic phone validation
+    if (!/^\d{10,}$/.test(phone.replace(/\D/g,''))) {
+        e.preventDefault();
+        alert('Please enter a valid phone number');
+        return;
+    }
+});
 
 function confirmDelete(userId) {
     document.getElementById('delete_user_id').value = userId;

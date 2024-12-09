@@ -59,7 +59,7 @@ function getStatusColor($status) {
         'cancelled' => 'bg-red-100 text-red-800'
     ];
     
-    return $colorMap[$status] ?? 'bg-gray-100 text-gray-800';
+    return $colorMap[strtolower($status)] ?? 'bg-gray-100 text-gray-800';
 }
 
 $user_id = $_SESSION['user_id'];
@@ -106,52 +106,68 @@ $completed_count = $result_completed->fetch_assoc()['completed_count'];
 </head>
 <body class="bg-gray-50" x-data="{ showLogoutModal: false }">
     <!-- Navigation -->
-    <nav class="bg-white shadow-lg sticky top-0 z-50">
+    <nav class="bg-white shadow-lg sticky top-0 z-50 border-b border-gray-100">
         <div class="max-w-7xl mx-auto px-4">
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
-                    <a href="index.php" class="flex items-center space-x-2">
-                        <i class="fas fa-car text-blue-600 text-2xl"></i>
-                        <span class="text-xl font-bold">AutoBots Tech</span>
+                    <a href="index.php" class="flex items-center">
+                        <i class="fas fa-car text-blue-600 text-2xl transform hover:scale-110 transition-transform"></i>
+                        <span class="ml-2 text-xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
+                            AutoBots Tech
+                        </span>
                     </a>
                 </div>
 
-                <!-- Profile Dropdown -->
-                <div class="flex items-center space-x-4">
-                    <a href="technician_dashboard.php" class="nav-link active px-3 py-2 rounded-md text-sm font-medium">
-                        <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                <!-- Profile and Navigation -->
+                <div class="flex items-center space-x-6">
+                    <a href="technician_dashboard.php" 
+                       class="nav-link active px-3 py-2 rounded-md text-sm font-medium inline-flex items-center space-x-2 border-b-2 border-blue-600">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>Dashboard</span>
                     </a>
-                    <a href="technician_manage_appointments.php" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
-                        <i class="fas fa-calendar mr-2"></i>Appointments
+                    <a href="technician_manage_appointments.php" 
+                       class="nav-link px-3 py-2 rounded-md text-sm font-medium inline-flex items-center space-x-2 text-gray-600 hover:text-blue-600 transition-colors">
+                        <i class="fas fa-calendar"></i>
+                        <span>Appointments</span>
                     </a>
                     
+                    <!-- Profile Dropdown -->
                     <div class="relative" x-data="{ profileOpen: false }">
                         <button @click="profileOpen = !profileOpen" 
-                                class="flex items-center space-x-3 text-gray-600 hover:text-blue-600 focus:outline-none">
+                                class="flex items-center space-x-3 text-gray-600 hover:text-blue-600 focus:outline-none transition-colors">
                             <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($user_data['first_name'] . ' ' . $user_data['last_name']); ?>&background=2563eb&color=fff" 
-                                 class="h-8 w-8 rounded-full">
+                                 class="h-8 w-8 rounded-full ring-2 ring-blue-600 ring-offset-2">
                             <span class="text-sm font-medium"><?php echo htmlspecialchars($user_data['first_name']); ?></span>
-                            <svg class="w-4 h-4" :class="{'rotate-180': profileOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-4 h-4 transition-transform duration-200" :class="{'rotate-180': profileOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
                         </button>
 
+                        <!-- Enhanced dropdown menu -->
                         <div x-show="profileOpen"
                              x-cloak
                              @click.away="profileOpen = false"
-                             class="absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-50">
-                            <div class="px-4 py-2 border-b">
+                             class="absolute right-0 mt-3 w-48 rounded-lg shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-50 transform origin-top-right transition-all"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-75"
+                             x-transition:leave-start="opacity-100 scale-100"
+                             x-transition:leave-end="opacity-0 scale-95">
+                            <!-- Profile section -->
+                            <div class="px-4 py-3 border-b">
                                 <p class="text-sm text-gray-700 font-medium">
                                     <?php echo htmlspecialchars($user_data['first_name'] . ' ' . $user_data['last_name']); ?>
                                 </p>
                                 <p class="text-xs text-gray-500"><?php echo htmlspecialchars($user_data['email']); ?></p>
                             </div>
                             
-                            <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                <i class="fas fa-user-circle mr-2"></i>My Profile
+                            <!-- Menu items -->
+                            <a href="profile.php" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                                <i class="fas fa-user-circle mr-2 text-blue-600"></i>My Profile
                             </a>
                             <button @click="showLogoutModal = true; profileOpen = false" 
-                                    class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
+                                    class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
                                 <i class="fas fa-sign-out-alt mr-2"></i>Logout
                             </button>
                         </div>
@@ -164,16 +180,20 @@ $completed_count = $result_completed->fetch_assoc()['completed_count'];
     <!-- Main Content -->
     <div class="max-w-7xl mx-auto px-4 py-8">
         <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div class="bg-white rounded-lg shadow p-6 transition-transform duration-200 stat-card">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
                 <div class="flex items-center">
-                    <div class="p-3 bg-blue-100 rounded-full">
-                        <i class="fas fa-clipboard-list text-blue-600"></i>
+                    <div class="p-3 bg-blue-100 rounded-xl">
+                        <i class="fas fa-clipboard-list text-blue-600 text-xl"></i>
                     </div>
                     <div class="ml-4">
-                        <h3 class="text-gray-500 text-sm">Assigned Tasks</h3>
-                        <p class="text-2xl font-semibold"><?php echo $appointments->num_rows; ?></p>
+                        <h3 class="text-gray-500 text-sm font-medium">Assigned Tasks</h3>
+                        <p class="text-3xl font-bold text-gray-900 mt-1"><?php echo $appointments->num_rows; ?></p>
                     </div>
+                </div>
+                <div class="mt-4 flex items-center text-sm text-gray-600">
+                    <i class="fas fa-clock mr-2"></i>
+                    <span>Updated just now</span>
                 </div>
             </div>
             <div class="bg-white rounded-lg shadow p-6 transition-transform duration-200 stat-card">
@@ -213,9 +233,13 @@ $completed_count = $result_completed->fetch_assoc()['completed_count'];
         </div>
 
         <!-- Appointments Table -->
-        <div class="bg-white rounded-lg shadow-md overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-xl font-semibold text-gray-800">My Appointments</h2>
+        <div class="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                    <i class="fas fa-calendar-check text-blue-600 mr-2"></i>
+                    My Appointments
+                </h2>
+                <!-- Add filter/search if needed -->
             </div>
             <div class="overflow-x-auto">
                 <!-- Your existing table code here, but remove the outer div -->
@@ -232,12 +256,12 @@ $completed_count = $result_completed->fetch_assoc()['completed_count'];
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                         <?php while($appointment = $appointments->fetch_assoc()): ?>
-                            <tr>
+                            <tr class="hover:bg-gray-50 transition-colors">
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="flex items-center">
                                         <div class="flex-shrink-0 h-10 w-10">
-                                            <img class="h-10 w-10 rounded-full" 
-                                                 src="https://ui-avatars.com/api/?name=<?php echo urlencode($appointment['first_name'] . ' ' . $appointment['last_name']); ?>" 
+                                            <img class="h-10 w-10 rounded-full ring-2 ring-gray-200" 
+                                                 src="https://ui-avatars.com/api/?name=<?php echo urlencode($appointment['first_name'] . ' ' . $appointment['last_name']); ?>&background=2563eb&color=fff" 
                                                  alt="">
                                         </div>
                                         <div class="ml-4">
@@ -264,8 +288,11 @@ $completed_count = $result_completed->fetch_assoc()['completed_count'];
                                             case 'pending':
                                                 echo 'bg-yellow-100 text-yellow-800';
                                                 break;
-                                            case 'in-progress':
+                                            case 'confirmed':
                                                 echo 'bg-blue-100 text-blue-800';
+                                                break;
+                                            case 'in-progress':
+                                                echo 'bg-indigo-100 text-indigo-800';
                                                 break;
                                             case 'completed':
                                                 echo 'bg-green-100 text-green-800';
@@ -280,9 +307,10 @@ $completed_count = $result_completed->fetch_assoc()['completed_count'];
                                         <?php echo ucfirst($appointment['status']); ?>
                                     </span>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <!-- Changed from text-right to text-left and adjusted button styling -->
                                     <button onclick="updateStatus(<?php echo $appointment['appointment_id']; ?>)"
-                                            class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                            class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
                                         <i class="fas fa-edit mr-2"></i>
                                         Update Status
                                     </button>
@@ -352,6 +380,7 @@ $completed_count = $result_completed->fetch_assoc()['completed_count'];
                     <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
                     <select name="status" id="status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                         <option value="pending">Pending</option>
+                        <option value="confirmed">Confirmed</option>
                         <option value="in-progress">In Progress</option>
                         <option value="completed">Completed</option>
                         <option value="cancelled">Cancelled</option>
@@ -583,3 +612,58 @@ $completed_count = $result_completed->fetch_assoc()['completed_count'];
     </script>
 </body>
 </html>
+
+<!-- Add these styles to your existing style section -->
+<style>
+.stat-card {
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.nav-link.active {
+    position: relative;
+}
+
+.nav-link.active:after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(to right, #2563eb, #1d4ed8);
+}
+
+@keyframes slideIn {
+    0% { transform: translateY(-10px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
+.animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+</style>

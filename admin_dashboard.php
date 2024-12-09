@@ -76,7 +76,8 @@ if (isset($_GET['search'])) {
         LEFT JOIN services s ON a.service_id = s.service_id 
         LEFT JOIN service_packages sp ON a.package_id = sp.package_id
         LEFT JOIN users t ON a.technician_id = t.user_id
-        ORDER BY a.appointment_date DESC";
+        ORDER BY a.appointment_date DESC
+        LIMIT 5";  // Changed from LIMIT 10 to LIMIT 5
     $appointments = $conn->query($appointments_sql);
 }
 
@@ -235,7 +236,7 @@ if (!isset($_GET['search'])) {
         LEFT JOIN service_packages sp ON a.package_id = sp.package_id
         LEFT JOIN users t ON a.technician_id = t.user_id
         ORDER BY a.appointment_date DESC
-        LIMIT 10";
+        LIMIT 5";
 }
 
 // Execute query and store result
@@ -384,227 +385,193 @@ $technicians = $conn->query($technicians_sql);
             </div>
         </div>
 
-        <!-- Recent Appointments -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-semibold">Recent Appointments</h2>
-                <form method="GET" class="flex space-x-2">
-                    <input type="text" 
-                           name="search" 
-                           placeholder="Search by customer name, service..." 
-                           value="<?php echo isset($_GET['search']) ? htmlspecialchars($_GET['search']) : ''; ?>"
-                           class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <button type="submit" 
-                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                        <i class="fas fa-search mr-2"></i>Search
+        <!-- Replace the Recent Appointments section with this improved table -->
+<div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+    <div class="flex justify-between items-center mb-6">
+        <div class="flex items-center justify-between w-full">
+            <h2 class="text-xl font-bold text-gray-900 flex items-center">
+                <i class="fas fa-calendar-check text-blue-600 mr-2"></i>
+                Recent Appointments
+            </h2>
+            <div class="flex items-center space-x-4">
+                <!-- Search Form -->
+                <form method="GET" class="flex items-center space-x-2">
+                    <div class="relative">
+                        <input type="text" 
+                               name="search" 
+                               placeholder="Search appointments..." 
+                               value="<?php echo isset($_GET['search']) ? htmlspecialchars($_GET['search']) : ''; ?>"
+                               class="pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64">
+                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                    </div>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                        Search
                     </button>
-                    <?php if(isset($_GET['search'])): ?>
-                        <a href="admin_dashboard.php" 
-                           class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors">
-                            Clear
-                        </a>
-                    <?php endif; ?>
                 </form>
+                <!-- View All Link -->
+                <a href="manage_appointments.php" 
+                   class="inline-flex items-center text-blue-600 hover:text-blue-700">
+                    <span>View All</span>
+                    <i class="fas fa-arrow-right ml-2"></i>
+                </a>
             </div>
+        </div>
+    </div>
 
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead>
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+    <!-- Updated Table -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date & Time
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Customer
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Service
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Price
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                <?php 
+                // Update the SQL query to order by date descending
+                if (!isset($appointments) || $appointments->num_rows == 0): 
+                ?>
+                    <tr>
+                        <td colspan="6" class="px-6 py-4 text-center text-gray-500">
+                            No appointments found
+                        </td>
+                    </tr>
+                <?php else: ?>
+                    <?php while($appointment = $appointments->fetch_assoc()): ?>
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900 font-medium">
+                                    <?php echo date('M d, Y', strtotime($appointment['appointment_date'])); ?>
+                                </div>
+                                <div class="text-sm text-gray-500">
+                                    <?php echo date('h:i A', strtotime($appointment['appointment_date'])); ?>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10">
+                                        <img class="h-10 w-10 rounded-full ring-2 ring-offset-2 ring-blue-500" 
+                                             src="https://ui-avatars.com/api/?name=<?php echo urlencode($appointment['first_name'] . ' ' . $appointment['last_name']); ?>&background=2563eb&color=fff" 
+                                             alt="">
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">
+                                            <?php echo htmlspecialchars($appointment['first_name'] . ' ' . $appointment['last_name']); ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900"><?php echo htmlspecialchars($appointment['service_name']); ?></div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <?php echo getStatusColor($appointment['status']); ?>">
+                                    <?php echo ucfirst($appointment['status']); ?>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                $<?php echo number_format($appointment['service_price'], 2); ?>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button onclick="openUpdateModal('<?php echo $appointment['appointment_id']; ?>', 
+                                                               '<?php echo $appointment['status']; ?>', 
+                                                               '<?php echo $appointment['technician_id']; ?>')"
+                                        class="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded-md hover:bg-blue-100 transition-colors mr-2">
+                                    <i class="fas fa-edit"></i> Update
+                                </button>
+                                <button onclick="confirmCancel(<?php echo $appointment['appointment_id']; ?>)"
+                                        class="text-red-600 hover:text-red-900 bg-red-50 px-3 py-1 rounded-md hover:bg-red-100 transition-colors">
+                                    <i class="fas fa-times"></i> Cancel
+                                </button>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        <?php if ($appointments): ?>
-                            <?php while($appointment = $appointments->fetch_assoc()): ?>
-                                <tr>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="flex items-center">
-                                            <div class="flex-shrink-0 h-10 w-10">
-                                                <img class="h-10 w-10 rounded-full" 
-                                                     src="https://ui-avatars.com/api/?name=<?php echo urlencode($appointment['first_name'] . ' ' . $appointment['last_name']); ?>&background=random" 
-                                                     alt="">
-                                            </div>
-                                            <div class="ml-4">
-                                                <div class="text-sm font-medium text-gray-900">
-                                                    <?php echo htmlspecialchars($appointment['first_name'] . ' ' . $appointment['last_name']); ?>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="text-sm text-gray-900">
-                                            <?php echo htmlspecialchars($appointment['service_name']); ?>
-                                        </div>
-                                        <div class="text-sm text-gray-500">
-                                            $<?php echo number_format($appointment['service_price'], 2); ?>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <?php echo date('M d, Y', strtotime($appointment['appointment_date'])); ?>
-                                    </td>
-                                    <!-- Update the status cell in the appointments table -->
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                            <?php 
-                                            switch($appointment['status']) {
-                                                case 'pending':
-                                                    echo 'bg-yellow-100 text-yellow-800';
-                                                    break;
-                                                case 'confirmed':
-                                                    echo 'bg-blue-100 text-blue-800';
-                                                    break;
-                                                case 'in-progress':
-                                                    echo 'bg-indigo-100 text-indigo-800';
-                                                    break;
-                                                case 'completed':
-                                                    echo 'bg-green-100 text-green-800';
-                                                    break;
-                                                case 'cancelled':
-                                                    echo 'bg-red-100 text-red-800';
-                                                    break;
-                                                default:
-                                                    echo 'bg-gray-100 text-gray-800';
-                                            }
-                                            ?>">
-                                            <?php echo ucfirst($appointment['status']); ?>
-                                        </span>
-                                    </td>
-                                    <!-- Update the status update button in the table -->
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <button onclick="openUpdateModal('<?php echo $appointment['appointment_id']; ?>', 
-                                                                       '<?php echo $appointment['status']; ?>', 
-                                                                       '<?php echo $appointment['technician_id']; ?>')"
-                                                class="text-blue-600 hover:text-blue-900 mr-2">
-                                            <i class="fas fa-edit"></i> Update
-                                        </button>
-                                        <button onclick="confirmCancel(<?php echo $appointment['appointment_id']; ?>)"
-                                                class="text-red-600 hover:text-red-900">
-                                            <i class="fas fa-times"></i> Cancel
-                                        </button>
-                                    </td>
-                                </tr>
-                            <?php endwhile; ?>
-                        <?php else: ?>
-                            <tr>
-                                <td colspan="6" class="px-6 py-4 text-center text-gray-500">
-                                    No appointments found or error loading appointments
-                                </td>
-                            </tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+                    <?php endwhile; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
     </div>
 
-    <!-- Add this modal for updating appointment status -->
-    <div id="updateStatusModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
-        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <form id="updateStatusForm" method="POST">
-                <input type="hidden" name="action" value="update_status">
-                <input type="hidden" name="appointment_id" id="modal_appointment_id">
-                
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Status</label>
-                    <select name="status" class="shadow border rounded w-full py-2 px-3">
-                        <option value="pending">Pending</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="in-progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                    </select>
-                </div>
-                
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Notes</label>
-                    <textarea name="notes" class="shadow border rounded w-full py-2 px-3"></textarea>
-                </div>
-                
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Assign Technician</label>
-                    <select name="technician_id" class="shadow border rounded w-full py-2 px-3">
-                        <option value="">Select Technician</option>
-                        <?php while($tech = $technicians->fetch_assoc()): ?>
-                            <option value="<?php echo $tech['user_id']; ?>">
-                                <?php echo htmlspecialchars($tech['first_name'] . ' ' . $tech['last_name']); ?>
-                            </option>
-                        <?php endwhile; ?>
-                    </select>
-                </div>
-                
-                <div class="flex justify-end space-x-2">
-                    <button type="button" onclick="closeModal('updateStatusModal')" 
-                            class="bg-gray-500 text-white px-4 py-2 rounded">Cancel</button>
-                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Update</button>
-                </div>
-            </form>
+    <!-- Remove the duplicate updateStatusModal and keep only this one -->
+<div id="updateStatusModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Update Appointment Status</h3>
+            <button onclick="closeModal('updateStatusModal')" class="text-gray-400 hover:text-gray-500">
+                <i class="fas fa-times"></i>
+            </button>
         </div>
-    </div>
-
-    <!-- Update the status modal HTML -->
-    <div id="updateStatusModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-medium text-gray-900">Update Appointment Status</h3>
-                <button onclick="closeModal('updateStatusModal')" class="text-gray-400 hover:text-gray-500">
-                    <i class="fas fa-times"></i>
-                </button>
+        
+        <form id="updateStatusForm" method="POST">
+            <input type="hidden" name="action" value="update_status">
+            <input type="hidden" name="appointment_id" id="modal_appointment_id">
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                <select name="status" id="modal_status" 
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <option value="pending">Pending</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
             </div>
             
-            <form id="updateStatusForm" method="POST">
-                <input type="hidden" name="action" value="update_status">
-                <input type="hidden" name="appointment_id" id="modal_appointment_id">
-                
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                    <select name="status" id="modal_status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                        <option value="pending">Pending</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="in-progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                    </select>
-                </div>
-                
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Assign Technician</label>
-                    <select name="technician_id" id="modal_technician" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                        <option value="">Select Technician</option>
-                        <?php 
-                        $technicians->data_seek(0);
-                        while($tech = $technicians->fetch_assoc()): 
-                        ?>
-                            <option value="<?php echo $tech['user_id']; ?>">
-                                <?php echo htmlspecialchars($tech['first_name'] . ' ' . $tech['last_name']); ?>
-                            </option>
-                        <?php endwhile; ?>
-                    </select>
-                </div>
-                
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                    <textarea name="notes" id="modal_notes" rows="3" 
-                              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
-                </div>
-                
-                <div class="flex justify-end space-x-3">
-                    <button type="button" onclick="closeModal('updateStatusModal')"
-                            class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
-                        Cancel
-                    </button>
-                    <button type="submit"
-                            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                        Update
-                    </button>
-                </div>
-            </form>
-        </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Assign Technician</label>
+                <select name="technician_id" id="modal_technician" 
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <option value="">Select Technician</option>
+                    <?php 
+                    $technicians->data_seek(0);
+                    while($tech = $technicians->fetch_assoc()): 
+                    ?>
+                        <option value="<?php echo $tech['user_id']; ?>">
+                            <?php echo htmlspecialchars($tech['first_name'] . ' ' . $tech['last_name']); ?>
+                        </option>
+                    <?php endwhile; ?>
+                </select>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                <textarea name="notes" id="modal_notes" rows="3" 
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+                <button type="button" onclick="closeModal('updateStatusModal')"
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    Update
+                </button>
+            </div>
+        </form>
     </div>
+</div>
 
     <!-- Add Cancel Confirmation Modal -->
     <div id="cancelModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
@@ -639,14 +606,25 @@ $technicians = $conn->query($technicians_sql);
     <script>
     // Update modal handling functions
     function openUpdateModal(appointmentId, currentStatus, technicianId) {
-        // Set values in the modal
+        // Get modal elements
+        const form = document.getElementById('updateStatusForm');
+        const statusSelect = document.getElementById('modal_status');
+        const techSelect = document.getElementById('modal_technician');
+        const notesTextarea = document.getElementById('modal_notes');
+        
+        // Reset form
+        form.reset();
+        
+        // Set values
         document.getElementById('modal_appointment_id').value = appointmentId;
-        document.getElementById('modal_status').value = currentStatus;
+        if (currentStatus) {
+            statusSelect.value = currentStatus;
+        }
         if (technicianId) {
-            document.getElementById('modal_technician').value = technicianId;
+            techSelect.value = technicianId;
         }
         
-        // Show the modal
+        // Show modal
         document.getElementById('updateStatusModal').classList.remove('hidden');
     }
 
@@ -678,10 +656,11 @@ $technicians = $conn->query($technicians_sql);
         });
     }
 
-    // Add search functionality
-    document.querySelector('input[name="search"]').addEventListener('keyup', function(e) {
-        if (e.key === 'Enter') {
-            this.closest('form').submit();
+    // Close modal with escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const modals = ['updateStatusModal', 'cancelModal'];
+            modals.forEach(modalId => closeModal(modalId));
         }
     });
     </script>
@@ -793,3 +772,17 @@ $technicians = $conn->query($technicians_sql);
     </div>
 </body>
 </html>
+
+<?php
+function getStatusColor($status) {
+    $colorMap = [
+        'pending' => 'bg-yellow-100 text-yellow-800',
+        'confirmed' => 'bg-blue-100 text-blue-800',
+        'in-progress' => 'bg-indigo-100 text-indigo-800',
+        'completed' => 'bg-green-100 text-green-800',
+        'cancelled' => 'bg-red-100 text-red-800'
+    ];
+    
+    return $colorMap[strtolower($status)] ?? 'bg-gray-100 text-gray-800';
+}
+?>

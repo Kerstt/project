@@ -8,6 +8,9 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 'technician') {
     exit();
 }
 
+// At the start of the file, add status validation
+$valid_statuses = ['pending', 'confirmed', 'in-progress', 'completed', 'cancelled'];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $response = ['success' => false];
     
@@ -15,9 +18,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $data = json_decode(file_get_contents('php://input'), true);
         
         $appointment_id = $data['appointment_id'];
-        $status = $data['status'];
+        $status = strtolower($data['status']); // Convert to lowercase for consistency
         $notes = $data['notes'];
         $technician_id = $_SESSION['user_id'];
+        
+        // Validate status
+        if (!in_array($status, $valid_statuses)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid status']);
+            exit();
+        }
         
         $conn->begin_transaction();
         

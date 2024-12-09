@@ -49,12 +49,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 case 'edit':
                     $appointment_id = $_POST['appointment_id'];
                     $status = $_POST['status'];
-                    $technician_id = $_POST['technician_id'];
+                    $technician_id = !empty($_POST['technician_id']) ? $_POST['technician_id'] : null;
                     $notes = $_POST['notes'];
                     
+                    // Update appointment
                     $stmt = $conn->prepare("
                         UPDATE appointments 
-                        SET status = ?, technician_id = ?, notes = ?, updated_at = NOW() 
+                        SET status = ?, 
+                            technician_id = ?, 
+                            notes = ?, 
+                            updated_at = NOW() 
                         WHERE appointment_id = ?
                     ");
                     $stmt->bind_param("sisi", $status, $technician_id, $notes, $appointment_id);
@@ -63,36 +67,57 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     // Create notification
                     $notify_sql = "INSERT INTO notifications (user_id, type, message, appointment_id) 
                                  SELECT user_id, 'appointment_update', 
-                                 CONCAT('Your appointment has been updated'), ? 
+                                 CONCAT('Your appointment status has been updated to: ', ?), ? 
                                  FROM appointments WHERE appointment_id = ?";
                     $stmt = $conn->prepare($notify_sql);
-                    $stmt->bind_param("ii", $appointment_id, $appointment_id);
+                    $stmt->bind_param("sii", $status, $appointment_id, $appointment_id);
                     $stmt->execute();
                     
                     $conn->commit();
-                    $_SESSION['success_message'] = "Appointment updated successfully";
+                    $_SESSION['success'] = "Appointment updated successfully";
                     break;
 
                 case 'delete':
                     $appointment_id = $_POST['appointment_id'];
                     
-                    // Check if appointment can be deleted
-                    $check_sql = "SELECT status FROM appointments WHERE appointment_id = ?";
-                    $stmt = $conn->prepare($check_sql);
-                    $stmt->bind_param("i", $appointment_id);
-                    $stmt->execute();
-                    $result = $stmt->get_result()->fetch_assoc();
+                    // Start transaction
+                    $conn->begin_transaction();
                     
-                    if ($result['status'] == 'completed') {
-                        throw new Exception("Cannot delete completed appointments");
+                    try {
+                        // First delete related records from appointment_logs
+                        $delete_logs = "DELETE FROM appointment_logs WHERE appointment_id = ?";
+                        $stmt = $conn->prepare($delete_logs);
+                        $stmt->bind_param("i", $appointment_id);
+                        $stmt->execute();
+                        
+                        // Delete from appointment_status_history if exists
+                        $delete_history = "DELETE FROM appointment_status_history WHERE appointment_id = ?";
+                        $stmt = $conn->prepare($delete_history);
+                        $stmt->bind_param("i", $appointment_id);
+                        $stmt->execute();
+                        
+                        // Delete from notifications
+                        $delete_notifications = "DELETE FROM notifications WHERE appointment_id = ?";
+                        $stmt = $conn->prepare($delete_notifications);
+                        $stmt->bind_param("i", $appointment_id);
+                        $stmt->execute();
+                        
+                        // Finally delete the appointment
+                        $delete_appointment = "DELETE FROM appointments WHERE appointment_id = ?";
+                        $stmt = $conn->prepare($delete_appointment);
+                        $stmt->bind_param("i", $appointment_id);
+                        $stmt->execute();
+                        
+                        $conn->commit();
+                        $_SESSION['success'] = "Appointment deleted successfully";
+                        
+                    } catch (Exception $e) {
+                        $conn->rollback();
+                        $_SESSION['error'] = "Error deleting appointment: " . $e->getMessage();
                     }
                     
-                    $stmt = $conn->prepare("DELETE FROM appointments WHERE appointment_id = ?");
-                    $stmt->bind_param("i", $appointment_id);
-                    $stmt->execute();
-                    
-                    $conn->commit();
-                    $_SESSION['success_message'] = "Appointment deleted successfully";
+                    header('Location: manage_appointments.php');
+                    exit();
                     break;
             }
         } catch (Exception $e) {
@@ -384,13 +409,13 @@ $technicians = $conn->query($technicians_sql);
                                         class="text-blue-600 hover:text-blue-900 transition-colors duration-150">
                                     <i class="fas fa-eye"></i>
                                 </button>
-                                <button onclick="editAppointment(<?php echo htmlspecialchars(json_encode($row)); ?>)"
-                                        class="text-green-600 hover:text-green-900 transition-colors duration-150">
-                                    <i class="fas fa-edit"></i>
+                                <button onclick="openEditModal(<?php echo htmlspecialchars(json_encode($row)); ?>)"
+                                        class="bg-blue-100 text-blue-600 hover:bg-blue-200 px-3 py-1 rounded-md transition-colors duration-200">
+                                    <i class="fas fa-edit mr-1"></i> Edit
                                 </button>
-                                <button onclick="confirmDelete(<?php echo $row['appointment_id']; ?>)"
-                                        class="text-red-600 hover:text-red-900 transition-colors duration-150">
-                                    <i class="fas fa-trash-alt"></i>
+                                <button onclick="openDeleteModal(<?php echo $row['appointment_id']; ?>)"
+                                        class="bg-red-100 text-red-600 hover:bg-red-200 px-3 py-1 rounded-md transition-colors duration-200">
+                                    <i class="fas fa-trash-alt mr-1"></i> Delete
                                 </button>
                             </div>
                         </td>
@@ -458,70 +483,68 @@ $technicians = $conn->query($technicians_sql);
 </div>
 
 <!-- Edit Appointment Modal -->
-<div id="editModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+<div id="editModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
     <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-        <div class="mt-3">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-medium text-gray-900">Edit Appointment</h3>
-                <button onclick="closeModal('editModal')" class="text-gray-400 hover:text-gray-500">
-                    <i class="fas fa-times"></i>
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Edit Appointment</h3>
+            <button onclick="closeModal('editModal')" class="text-gray-400 hover:text-gray-500">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <form id="editForm" method="POST" class="space-y-4">
+            <input type="hidden" name="action" value="edit">
+            <input type="hidden" name="appointment_id" id="edit_appointment_id">
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select name="status" id="edit_status" 
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <option value="pending">Pending</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Assign Technician</label>
+                <select name="technician_id" id="edit_technician" 
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <option value="">Select Technician</option>
+                    <?php 
+                    $technicians->data_seek(0);
+                    while($tech = $technicians->fetch_assoc()): ?>
+                        <option value="<?php echo $tech['user_id']; ?>">
+                            <?php echo htmlspecialchars($tech['first_name'] . ' ' . $tech['last_name']); ?>
+                        </option>
+                    <?php endwhile; ?>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea name="notes" id="edit_notes" rows="3" 
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-3 pt-4">
+                <button type="button" onclick="closeModal('editModal')"
+                        class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                    Save Changes
                 </button>
             </div>
-            <form id="editForm" method="POST">
-                <input type="hidden" name="action" value="edit">
-                <input type="hidden" name="appointment_id" id="edit_appointment_id">
-                
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Status</label>
-                        <select name="status" id="edit_status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                            <option value="pending">Pending</option>
-                            <option value="confirmed">Confirmed</option>
-                            <option value="in-progress">In Progress</option>
-                            <option value="completed">Completed</option>
-                            <option value="cancelled">Cancelled</option>
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Technician</label>
-                        <select name="technician_id" id="edit_technician" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                            <option value="">Select Technician</option>
-                            <?php 
-                            $technicians->data_seek(0);
-                            while($tech = $technicians->fetch_assoc()): 
-                            ?>
-                                <option value="<?php echo $tech['user_id']; ?>">
-                                    <?php echo htmlspecialchars($tech['first_name'] . ' ' . $tech['last_name']); ?>
-                                </option>
-                            <?php endwhile; ?>
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Notes</label>
-                        <textarea name="notes" id="edit_notes" rows="3" 
-                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></textarea>
-                    </div>
-                    
-                    <div class="flex justify-end space-x-3">
-                        <button type="button" onclick="closeModal('editModal')"
-                                class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
-                            Cancel
-                        </button>
-                        <button type="submit"
-                                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                            Save Changes
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
+        </form>
     </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
-<div id="deleteModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+<!-- Replace the Delete Modal HTML -->
+<div id="deleteModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
     <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <div class="mt-3 text-center">
             <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
@@ -530,17 +553,18 @@ $technicians = $conn->query($technicians_sql);
             <h3 class="text-lg font-medium text-gray-900 mb-2">Delete Appointment</h3>
             <p class="text-sm text-gray-500 mb-6">Are you sure you want to delete this appointment? This action cannot be undone.</p>
             
-            <form method="POST">
+            <form id="deleteForm" method="POST" class="mt-2">
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="appointment_id" id="delete_appointment_id">
                 
                 <div class="flex justify-center space-x-4">
-                    <button type="button" onclick="closeModal('deleteModal')"
-                            class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                    <button type="button" 
+                            onclick="closeModal('deleteModal')"
+                            class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors">
                         Cancel
                     </button>
                     <button type="submit"
-                            class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                            class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors">
                         Delete
                     </button>
                 </div>
@@ -672,6 +696,90 @@ document.addEventListener('DOMContentLoaded', function() {
         form.submit();
     };
 });
+
+function openEditModal(appointment) {
+    // Set form values
+    document.getElementById('edit_appointment_id').value = appointment.appointment_id;
+    document.getElementById('edit_status').value = appointment.status || 'pending';
+    document.getElementById('edit_technician').value = appointment.technician_id || '';
+    document.getElementById('edit_notes').value = appointment.notes || '';
+    
+    // Show modal
+    document.getElementById('editModal').classList.remove('hidden');
+}
+
+// Update the edit form submission
+document.getElementById('editForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Validate form
+    const appointmentId = document.getElementById('edit_appointment_id').value;
+    const status = document.getElementById('edit_status').value;
+    
+    if (!appointmentId || !status) {
+        alert('Please fill in all required fields');
+        return;
+    }
+    
+    // Confirm before submitting
+    if (confirm('Are you sure you want to update this appointment?')) {
+        this.submit();
+    }
+});
+
+function openDeleteModal(appointmentId) {
+    document.getElementById('delete_appointment_id').value = appointmentId;
+    document.getElementById('deleteModal').classList.remove('hidden');
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).classList.add('hidden');
+}
+
+// Form submission handling
+document.getElementById('editForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (confirm('Are you sure you want to update this appointment?')) {
+        this.submit();
+    }
+});
+
+document.getElementById('deleteForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (confirm('Are you sure you want to delete this appointment? This cannot be undone.')) {
+        this.submit();
+    }
+});
+
+// Close modals when clicking outside
+window.onclick = function(event) {
+    const modals = ['editModal', 'deleteModal', 'viewModal'];
+    modals.forEach(modalId => {
+        const modal = document.getElementById(modalId);
+        if (event.target === modal) {
+            closeModal(modalId);
+        }
+    });
+}
+
+// Close modals with escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const modals = ['editModal', 'deleteModal', 'viewModal'];
+        modals.forEach(modalId => closeModal(modalId));
+    }
+});
+
+// Add error handling for form submission
+<?php if (isset($_SESSION['error'])): ?>
+    alert("<?php echo addslashes($_SESSION['error']); ?>");
+    <?php unset($_SESSION['error']); ?>
+<?php endif; ?>
+
+<?php if (isset($_SESSION['success'])): ?>
+    alert("<?php echo addslashes($_SESSION['success']); ?>");
+    <?php unset($_SESSION['success']); ?>
+<?php endif; ?>
 </script>
 
 <!-- Logout Modal -->

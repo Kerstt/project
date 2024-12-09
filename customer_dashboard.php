@@ -95,6 +95,18 @@ $stats = $stmt->get_result()->fetch_assoc();
 $stats['total_vehicles'] = $stats['total_vehicles'] ?? 0;
 $stats['completed_services'] = $stats['completed_services'] ?? 0;
 $stats['pending_appointments'] = $stats['pending_appointments'] ?? 0;
+
+function getStatusColor($status) {
+    $colorMap = [
+        'pending' => 'bg-yellow-100 text-yellow-800',
+        'confirmed' => 'bg-blue-100 text-blue-800',
+        'in-progress' => 'bg-indigo-100 text-indigo-800',
+        'completed' => 'bg-green-100 text-green-800',
+        'cancelled' => 'bg-red-100 text-red-800'
+    ];
+    
+    return $colorMap[strtolower($status)] ?? 'bg-gray-100 text-gray-800';
+}
 ?>
 
 <!DOCTYPE html>
@@ -151,6 +163,10 @@ $stats['pending_appointments'] = $stats['pending_appointments'] ?? 0;
                             <a href="service_history.php" 
                                class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
                                 <i class="fas fa-history mr-2"></i>Service History
+                            </a>
+                            <a href="customer_manage_appointments.php" 
+                               class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                                <i class="fas fa-calendar-alt mr-2"></i>Manage Appointments
                             </a>
                         </div>
                     </div>
@@ -226,6 +242,9 @@ $stats['pending_appointments'] = $stats['pending_appointments'] ?? 0;
                 <a href="service_history.php" class="text-gray-300 hover:bg-gray-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
                     <i class="fas fa-history mr-2"></i>Service History
                 </a>
+                <a href="customer_manage_appointments.php" class="text-gray-300 hover:bg-gray-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
+                    <i class="fas fa-calendar-alt mr-2"></i>Manage Appointments
+                </a>
                 <div class="border-t border-gray-700 pt-4 pb-3">
                     <div class="flex items-center px-5">
                         <div class="flex-shrink-0">
@@ -258,160 +277,160 @@ $stats['pending_appointments'] = $stats['pending_appointments'] ?? 0;
     });
     </script>
 
-    <!-- Main Content -->
-    <div class="max-w-7xl mx-auto px-4 py-8">
-        <!-- Welcome Banner -->
-        <div class="bg-gradient-to-r from-gray-800 to-gray-900 rounded-lg shadow-lg p-6 mb-8 animate-fadeIn">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h1 class="text-2xl font-bold text-white">Welcome back, <?php echo htmlspecialchars($user_data['first_name']); ?>!</h1>
-                    <p class="mt-1 text-gray-400">Manage your vehicles and appointments here</p>
+    <!-- Main Content Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Welcome Section -->
+    <div class="bg-gradient-to-r from-gray-800 to-gray-700 rounded-xl shadow-2xl p-8 mb-8">
+        <h1 class="text-3xl font-bold text-white mb-2">Welcome back, <?php echo htmlspecialchars($user_data['first_name']); ?>!</h1>
+        <p class="text-gray-300">Here's an overview of your automotive services</p>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <!-- Vehicles Card -->
+        <div class="bg-gradient-to-br from-blue-500/10 to-blue-600/10 rounded-xl p-6 shadow-lg border border-gray-700 transform transition duration-300 hover:scale-105">
+            <div class="flex items-center">
+                <div class="p-3 bg-blue-500/20 rounded-full">
+                    <i class="fas fa-car text-blue-400 text-2xl"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-gray-400 text-sm font-medium uppercase tracking-wider">My Vehicles</p>
+                    <h3 class="text-3xl font-bold text-white mt-1"><?php echo $stats['total_vehicles']; ?></h3>
                 </div>
             </div>
         </div>
 
-        <!-- Stats Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div class="bg-gray-800 rounded-lg shadow-lg p-6 transition duration-300 stat-card">
-                <div class="flex items-center">
-                    <div class="p-3 bg-orange-500/10 rounded-full">
-                        <i class="fas fa-car text-orange-500 text-xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-gray-400">Your Vehicles</p>
-                        <h3 class="text-2xl font-bold text-white"><?php echo $stats['total_vehicles']; ?></h3>
-                    </div>
+        <!-- Pending Appointments Card -->
+        <div class="bg-gradient-to-br from-orange-500/10 to-orange-600/10 rounded-xl p-6 shadow-lg border border-gray-700 transform transition duration-300 hover:scale-105">
+            <div class="flex items-center">
+                <div class="p-3 bg-orange-500/20 rounded-full">
+                    <i class="fas fa-clock text-orange-400 text-2xl"></i>
                 </div>
-            </div>
-
-            <div class="bg-gray-800 rounded-lg shadow-lg p-6 transition duration-300 stat-card">
-                <div class="flex items-center">
-                    <div class="p-3 bg-blue-500/10 rounded-full">
-                        <i class="fas fa-calendar-check text-blue-500 text-xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-gray-400">Upcoming Services</p>
-                        <h3 class="text-2xl font-bold text-white"><?php echo (int)$stats['pending_appointments']; ?></h3>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-gray-800 rounded-lg shadow-lg p-6 transition duration-300 stat-card">
-                <div class="flex items-center">
-                    <div class="p-3 bg-green-500/10 rounded-full">
-                        <i class="fas fa-check-circle text-green-500 text-xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-gray-400">Completed Services</p>
-                        <h3 class="text-2xl font-bold text-white"><?php echo $stats['completed_services']; ?></h3>
-                    </div>
+                <div class="ml-4">
+                    <p class="text-gray-400 text-sm font-medium uppercase tracking-wider">Pending Services</p>
+                    <h3 class="text-3xl font-bold text-white mt-1"><?php echo (int)$stats['pending_appointments']; ?></h3>
                 </div>
             </div>
         </div>
 
-        <!-- Main Content Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Appointments Section -->
-            <div class="lg:col-span-2 space-y-6">
-                <div class="bg-gray-800 rounded-lg shadow-lg p-6">
-                    <h2 class="text-xl font-semibold text-white mb-4">Upcoming Appointments</h2>
-                    <?php if ($result_appointments->num_rows > 0): ?>
-                        <div class="space-y-4">
-                            <?php while($appointment = $result_appointments->fetch_assoc()): ?>
-                                <div class="bg-gray-700 rounded-lg p-4 hover:bg-gray-600 transition card-zoom">
-                                    <div class="flex justify-between items-start">
-                                        <div>
-                                            <h3 class="font-semibold text-white"><?php echo htmlspecialchars($appointment['service_name']); ?></h3>
-                                            <p class="text-gray-400"><?php echo date('F j, Y g:i A', strtotime($appointment['appointment_date'])); ?></p>
-                                            <p class="text-sm text-gray-400 mt-2">
-                                                Vehicle: <?php echo htmlspecialchars($appointment['make'] . ' ' . $appointment['model']); ?>
-                                            </p>
-                                        </div>
-                                        <div class="text-right">
-                                            <span class="px-3 py-1 rounded-full text-sm 
-                                                <?php echo $appointment['status'] == 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                                    ($appointment['status'] == 'completed' ? 'bg-green-100 text-green-800' : 
-                                                    'bg-blue-100 text-blue-800'); ?>">
-                                                <?php echo ucfirst($appointment['status']); ?>
-                                            </span>
-                                            <p class="mt-2 font-semibold text-white">$<?php echo number_format($appointment['price'], 2); ?></p>
-                                        </div>
-                                    </div>
-                                </div>
-                            <?php endwhile; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="text-center py-8">
-                            <img src="https://cdn-icons-png.flaticon.com/512/6598/6598519.png" 
-                                 alt="No appointments" class="w-24 h-24 mx-auto mb-4 opacity-50">
-                            <p class="text-gray-400">No upcoming appointments</p>
-                            <a href="book_appointment.php" class="mt-4 inline-block text-orange-500 hover:text-orange-400">
-                                Schedule your first service →
-                            </a>
-                        </div>
-                    <?php endif; ?>
+        <!-- Completed Services Card -->
+        <div class="bg-gradient-to-br from-green-500/10 to-green-600/10 rounded-xl p-6 shadow-lg border border-gray-700 transform transition duration-300 hover:scale-105">
+            <div class="flex items-center">
+                <div class="p-3 bg-green-500/20 rounded-full">
+                    <i class="fas fa-check-circle text-green-400 text-2xl"></i>
                 </div>
-
-                <!-- Vehicles Section -->
-                <div class="bg-gray-800 rounded-lg shadow-lg p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-semibold text-white">Your Vehicles</h2>
-                        <a href="manage_vehicles.php" class="text-orange-500 hover:text-orange-400">
-                            Manage Vehicles →
-                        </a>
-                    </div>
-                    <?php if ($result_vehicles->num_rows > 0): ?>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <?php while($vehicle = $result_vehicles->fetch_assoc()): ?>
-                                <div class="bg-gray-700 rounded-lg p-4 card-zoom">
-                                    <div class="flex items-start space-x-4">
-                                        <div class="p-3 bg-gray-600 rounded-lg">
-                                            <i class="fas fa-car text-orange-500 text-xl"></i>
-                                        </div>
-                                        <div>
-                                            <h3 class="font-semibold text-white"><?php echo htmlspecialchars($vehicle['make'] . ' ' . $vehicle['model']); ?></h3>
-                                            <p class="text-sm text-gray-400">Year: <?php echo htmlspecialchars($vehicle['year']); ?></p>
-                                            <p class="text-sm text-gray-400">Plate: <?php echo htmlspecialchars($vehicle['license_plate']); ?></p>
-                                        </div>
-                                    </div>
-                                </div>
-                            <?php endwhile; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="text-center py-8">
-                            <img src="https://cdn-icons-png.flaticon.com/512/2554/2554969.png" 
-                                 alt="No vehicles" class="w-24 h-24 mx-auto mb-4 opacity-50">
-                            <p class="text-gray-400">No vehicles registered</p>
-                            <a href="manage_vehicles.php" class="mt-4 inline-block text-orange-500 hover:text-orange-400">
-                                Register your first vehicle →
-                            </a>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <!-- Quick Actions Sidebar -->
-            <div class="space-y-6">
-                <div class="bg-gray-800 rounded-lg shadow-lg p-6">
-                    <h2 class="text-xl font-semibold text-white mb-4">Quick Actions</h2>
-                    <div class="space-y-3">
-                        <a href="book_appointment.php" class="flex items-center space-x-3 p-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition">
-                            <i class="fas fa-calendar-plus text-orange-500"></i>
-                            <span>Book New Appointment</span>
-                        </a>
-                        <a href="manage_vehicles.php" class="flex items-center space-x-3 p-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition">
-                            <i class="fas fa-car text-orange-500"></i>
-                            <span>Add New Vehicle</span>
-                        </a>
-                        <a href="service_history.php" class="flex items-center space-x-3 p-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition">
-                            <i class="fas fa-history text-orange-500"></i>
-                            <span>View Service History</span>
-                        </a>
-                    </div>
+                <div class="ml-4">
+                    <p class="text-gray-400 text-sm font-medium uppercase tracking-wider">Completed Services</p>
+                    <h3 class="text-3xl font-bold text-white mt-1"><?php echo $stats['completed_services']; ?></h3>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Appointments Section -->
+        <div class="lg:col-span-2">
+            <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-xl border border-gray-700">
+                <div class="p-6 border-b border-gray-700">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xl font-semibold text-white">Upcoming Appointments</h2>
+                        <a href="book_appointment.php" class="inline-flex items-center px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors duration-300">
+                            <i class="fas fa-plus mr-2"></i>Book Service
+                        </a>
+                    </div>
+                </div>
+
+                <?php if ($result_appointments->num_rows > 0): ?>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-700">
+                            <thead class="bg-gray-700/50">
+                                <tr>
+                                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Service</th>
+                                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Date & Time</th>
+                                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Vehicle</th>
+                                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-4 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Price</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-700 bg-gray-800/30">
+                                <?php while($appointment = $result_appointments->fetch_assoc()): ?>
+                                    <tr class="hover:bg-gray-700/50 transition-colors duration-200">
+                                        <td class="px-6 py-4">
+                                            <div class="text-sm font-medium text-white"><?php echo htmlspecialchars($appointment['service_name']); ?></div>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <div class="text-sm text-gray-300">
+                                                <i class="far fa-calendar-alt mr-2 text-gray-400"></i>
+                                                <?php echo date('F j, Y g:i A', strtotime($appointment['appointment_date'])); ?>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <div class="text-sm text-gray-300">
+                                                <i class="fas fa-car mr-2 text-gray-400"></i>
+                                                <?php echo htmlspecialchars($appointment['make'] . ' ' . $appointment['model']); ?>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full shadow-sm
+                                                <?php echo getStatusColor($appointment['status']); ?>">
+                                                <?php echo ucfirst($appointment['status']); ?>
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-4 text-right text-sm font-medium text-white">
+                                            $<?php echo number_format($appointment['price'], 2); ?>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php else: ?>
+                    <div class="flex flex-col items-center justify-center py-12">
+                        <img src="assets/images/no-appointments.svg" alt="No appointments" class="w-32 h-32 mb-4 opacity-50">
+                        <p class="text-gray-400 mb-4">No upcoming appointments</p>
+                        <a href="book_appointment.php" 
+                           class="inline-flex items-center px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors duration-300">
+                            <i class="fas fa-calendar-plus mr-2"></i>Schedule Service
+                        </a>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="lg:col-span-1 space-y-6">
+            <!-- Quick Actions -->
+            <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-xl border border-gray-700 p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">Quick Actions</h3>
+                <div class="space-y-3">
+                    <a href="book_appointment.php" class="flex items-center p-3 bg-orange-500/10 text-orange-400 rounded-lg hover:bg-orange-500/20 transition-colors duration-200">
+                        <i class="fas fa-calendar-plus mr-3"></i>
+                        <span>Book New Service</span>
+                    </a>
+                    <a href="manage_vehicles.php" class="flex items-center p-3 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500/20 transition-colors duration-200">
+                        <i class="fas fa-car mr-3"></i>
+                        <span>Manage Vehicles</span>
+                    </a>
+                    <a href="service_history.php" class="flex items-center p-3 bg-green-500/10 text-green-400 rounded-lg hover:bg-green-500/20 transition-colors duration-200">
+                        <i class="fas fa-history mr-3"></i>
+                        <span>View Service History</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add this to your existing styles -->
+<style>
+    .stat-card {
+        transition: transform 0.3s ease-in-out;
+    }
+    .stat-card:hover {
+        transform: translateY(-5px);
+    }
+</style>
 
     <!-- Add Reschedule Modal -->
     <div id="rescheduleModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full">

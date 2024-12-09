@@ -155,6 +155,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                            class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
                             <i class="fas fa-history mr-2"></i>Service History
                         </a>
+                        <a href="customer_manage_appointments.php" 
+                           class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-calendar-alt mr-2"></i>Manage Appointments
+                        </a>
                     </div>
                 </div>
             </div>

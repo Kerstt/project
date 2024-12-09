@@ -537,5 +537,139 @@ $packages = $conn->query($packages_sql);
             </div>
         </div>
     </div>
+<!-- Add this JavaScript section before closing body tag -->
+<script>
+// Tab switching functionality
+function switchTab(tabName) {
+    // Hide all content first
+    document.getElementById('servicesContent').classList.add('hidden');
+    document.getElementById('packagesContent').classList.add('hidden');
+    
+    // Remove active class from all tabs
+    document.getElementById('servicesTab').classList.remove('border-blue-600', 'text-blue-600');
+    document.getElementById('packagesTab').classList.remove('border-blue-600', 'text-blue-600');
+    
+    // Show selected content and activate tab
+    if (tabName === 'services') {
+        document.getElementById('servicesContent').classList.remove('hidden');
+        document.getElementById('servicesTab').classList.add('border-blue-600', 'text-blue-600');
+    } else {
+        document.getElementById('packagesContent').classList.remove('hidden');
+        document.getElementById('packagesTab').classList.add('border-blue-600', 'text-blue-600');
+    }
+}
+
+// Service Modal Functions
+function openAddModal() {
+    document.getElementById('modalTitle').textContent = 'Add New Service';
+    document.getElementById('formAction').value = 'add';
+    document.getElementById('serviceId').value = '';
+    document.getElementById('serviceName').value = '';
+    document.getElementById('serviceDescription').value = '';
+    document.getElementById('servicePrice').value = '';
+    document.getElementById('serviceModal').classList.remove('hidden');
+}
+
+function openEditModal(service) {
+    document.getElementById('modalTitle').textContent = 'Edit Service';
+    document.getElementById('formAction').value = 'edit';
+    document.getElementById('serviceId').value = service.service_id;
+    document.getElementById('serviceName').value = service.name;
+    document.getElementById('serviceDescription').value = service.description;
+    document.getElementById('servicePrice').value = service.price;
+    document.getElementById('serviceModal').classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('serviceModal').classList.add('hidden');
+}
+
+// Package Modal Functions
+function openAddPackageModal() {
+    document.getElementById('packageModalTitle').textContent = 'Add New Package';
+    document.getElementById('packageFormAction').value = 'add_package';
+    document.getElementById('packageId').value = '';
+    document.getElementById('packageName').value = '';
+    document.getElementById('packageDescription').value = '';
+    document.getElementById('packagePrice').value = '';
+    document.getElementById('packageDuration').value = '';
+    document.getElementById('packageServices').value = '';
+    document.getElementById('packageModal').classList.remove('hidden');
+}
+
+function openEditPackageModal(package) {
+    document.getElementById('packageModalTitle').textContent = 'Edit Package';
+    document.getElementById('packageFormAction').value = 'edit_package';
+    document.getElementById('packageId').value = package.package_id;
+    document.getElementById('packageName').value = package.name;
+    document.getElementById('packageDescription').value = package.description;
+    document.getElementById('packagePrice').value = package.price;
+    document.getElementById('packageDuration').value = package.duration_minutes;
+    document.getElementById('packageServices').value = package.included_services;
+    document.getElementById('packageModal').classList.remove('hidden');
+}
+
+function closePackageModal() {
+    document.getElementById('packageModal').classList.add('hidden');
+}
+
+// Delete Functions
+function confirmDelete(serviceId) {
+    if (confirm('Are you sure you want to delete this service?')) {
+        document.getElementById('deleteServiceId').value = serviceId;
+        document.getElementById('deleteModal').classList.remove('hidden');
+    }
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.add('hidden');
+}
+
+function confirmDeletePackage(packageId) {
+    if (confirm('Are you sure you want to delete this package?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="action" value="delete_package">
+            <input type="hidden" name="package_id" value="${packageId}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Close modals when clicking outside
+window.onclick = function(event) {
+    const modals = ['serviceModal', 'packageModal', 'deleteModal'];
+    modals.forEach(modalId => {
+        const modal = document.getElementById(modalId);
+        if (event.target === modal) {
+            modal.classList.add('hidden');
+        }
+    });
+}
+
+// Add form validation
+document.getElementById('serviceForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (!this.checkValidity()) {
+        return false;
+    }
+    this.submit();
+});
+
+document.getElementById('packageForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (!this.checkValidity()) {
+        return false;
+    }
+    this.submit();
+});
+
+// Initialize with services tab active
+document.addEventListener('DOMContentLoaded', function() {
+    switchTab('services');
+});
+</script>
 </body>
 </html>

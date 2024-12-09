@@ -258,99 +258,108 @@ $user_data = $stmt->get_result()->fetch_assoc();
         </div>
     </div>
 
-    <!-- Main Content -->
+    <!-- Replace the Main Content section with this improved table design -->
     <div class="max-w-7xl mx-auto px-4 py-8">
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-2xl font-bold text-gray-900">Manage Appointments</h1>
-            
-            <!-- Search Form -->
-            <form action="" method="GET" class="flex gap-4">
-                <input type="text" name="search" placeholder="Search appointments..."
-                       value="<?php echo isset($_GET['search']) ? htmlspecialchars($_GET['search']) : ''; ?>"
-                       class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                    <i class="fas fa-search mr-2"></i>Search
-                </button>
-            </form>
+        <!-- Page Header -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <div class="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+                <h1 class="text-2xl font-bold text-gray-900">Manage Appointments</h1>
+                <form action="" method="GET" class="flex w-full md:w-auto gap-2">
+                    <input type="text" 
+                           name="search" 
+                           placeholder="Search appointments..."
+                           value="<?php echo isset($_GET['search']) ? htmlspecialchars($_GET['search']) : ''; ?>"
+                           class="w-full md:w-80 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <button type="submit" 
+                            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="fas fa-search mr-2"></i>
+                        Search
+                    </button>
+                </form>
+            </div>
         </div>
 
-        <!-- Success/Error Messages -->
-        <?php if (isset($_SESSION['success_message'])): ?>
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">
-                <?php 
-                echo $_SESSION['success_message'];
-                unset($_SESSION['success_message']);
-                ?>
-            </div>
-        <?php endif; ?>
-
-        <?php if (isset($_SESSION['error_message'])): ?>
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
-                <?php 
-                echo $_SESSION['error_message'];
-                unset($_SESSION['error_message']);
-                ?>
-            </div>
-        <?php endif; ?>
-
         <!-- Appointments Table -->
-        <div class="bg-white shadow overflow-hidden rounded-lg">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    <?php while ($row = $result->fetch_assoc()): ?>
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
                         <tr>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="flex items-center">
-                                    <div class="flex-shrink-0 h-10 w-10">
-                                        <img class="h-10 w-10 rounded-full" 
-                                             src="https://ui-avatars.com/api/?name=<?php echo urlencode($row['first_name'] . ' ' . $row['last_name']); ?>&background=random" 
-                                             alt="">
-                                    </div>
-                                    <div class="ml-4">
-                                        <div class="text-sm font-medium text-gray-900">
-                                            <?php echo htmlspecialchars($row['first_name'] . ' ' . $row['last_name']); ?>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Customer
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Service
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Vehicle
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Date & Time
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Status
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Actions
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <?php while ($row = $result->fetch_assoc()): ?>
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0 h-10 w-10">
+                                            <img class="h-10 w-10 rounded-full ring-2 ring-offset-2 ring-blue-500" 
+                                                 src="https://ui-avatars.com/api/?name=<?php echo urlencode($row['first_name'] . ' ' . $row['last_name']); ?>&background=2563eb&color=fff" 
+                                                 alt="">
+                                        </div>
+                                        <div class="ml-4">
+                                            <div class="text-sm font-medium text-gray-900">
+                                                <?php echo htmlspecialchars($row['first_name'] . ' ' . $row['last_name']); ?>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <?php echo htmlspecialchars($row['make'] . ' ' . $row['model']); ?>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <?php echo htmlspecialchars($row['service_name']); ?>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <?php echo date('M d, Y h:i A', strtotime($row['appointment_date'])); ?>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <?php echo getStatusColor($row['status']); ?>">
-                                    <?php echo ucfirst($row['status']); ?>
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <button @click="selectedAppointment = <?php echo htmlspecialchars(json_encode($row)); ?>; showViewModal = true"
-                                        class="text-blue-600 hover:text-blue-900 mr-3">
-                                    <i class="fas fa-eye"></i> View
-                                </button>
-                                <button @click="selectedAppointment = <?php echo htmlspecialchars(json_encode($row)); ?>; showEditModal = true"
-                                        class="text-green-600 hover:text-green-900">
-                                    <i class="fas fa-edit"></i> Update
-                                </button>
-                            </td>
-                        </tr>
-                    <?php endwhile; ?>
-                </tbody>
-            </table>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm text-gray-900"><?php echo htmlspecialchars($row['service_name']); ?></div>
+                                    <div class="text-sm text-gray-500"><?php echo $row['service_type'] === 'package' ? 'Package' : 'Single Service'; ?></div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center text-sm text-gray-900">
+                                        <i class="fas fa-car text-gray-400 mr-2"></i>
+                                        <?php echo htmlspecialchars($row['make'] . ' ' . $row['model']); ?>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm text-gray-900">
+                                        <?php echo date('M d, Y', strtotime($row['appointment_date'])); ?>
+                                    </div>
+                                    <div class="text-sm text-gray-500">
+                                        <?php echo date('h:i A', strtotime($row['appointment_date'])); ?>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full <?php echo getStatusColor($row['status']); ?>">
+                                        <?php echo ucfirst($row['status']); ?>
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <button @click="selectedAppointment = <?php echo htmlspecialchars(json_encode($row)); ?>; showViewModal = true"
+                                            class="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 mr-2">
+                                        <i class="fas fa-eye mr-1"></i> View
+                                    </button>
+                                    <button @click="selectedAppointment = <?php echo htmlspecialchars(json_encode($row)); ?>; showEditModal = true"
+                                            class="inline-flex items-center px-3 py-1 bg-green-100 text-green-700 rounded-md hover:bg-green-200">
+                                        <i class="fas fa-edit mr-1"></i> Update
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endwhile; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
