@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($stmt->execute()) {
         if ($appointment_status === 'completed') {
             $notifier = new NotificationsManager($conn);
-            $loyalty = new LoyaltyProgram($conn);
+           
 
             // Award loyalty points
             $points_earned = $loyalty->awardPoints($user_id, $appointment_amount, 'service_completion');

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 30, 2024 at 05:20 AM
+-- Generation Time: Dec 11, 2024 at 08:35 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -31,23 +31,61 @@ CREATE TABLE `appointments` (
   `appointment_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
   `vehicle_id` int(11) NOT NULL,
-  `service_id` int(11) NOT NULL,
+  `service_id` int(11) DEFAULT NULL,
   `technician_id` int(11) DEFAULT NULL,
   `appointment_date` datetime NOT NULL,
-  `status` enum('pending','in-progress','completed','cancelled') DEFAULT 'pending',
+  `status` enum('pending','confirmed','in-progress','completed','cancelled') DEFAULT 'pending',
   `notes` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `payment_status` enum('pending','paid') DEFAULT NULL
+  `package_id` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `appointments`
 --
 
-INSERT INTO `appointments` (`appointment_id`, `user_id`, `vehicle_id`, `service_id`, `technician_id`, `appointment_date`, `status`, `notes`, `created_at`, `updated_at`, `payment_status`) VALUES
-(1, 11, 1, 1, NULL, '2024-11-29 12:03:00', 'pending', 'Need it asap', '2024-11-28 21:06:28', '2024-11-28 21:06:28', NULL),
-(2, 11, 1, 2, NULL, '2024-11-30 17:06:00', 'pending', 'Need for racing', '2024-11-28 21:07:05', '2024-11-28 21:07:05', NULL);
+INSERT INTO `appointments` (`appointment_id`, `user_id`, `vehicle_id`, `service_id`, `technician_id`, `appointment_date`, `status`, `notes`, `created_at`, `updated_at`, `package_id`) VALUES
+(26, 14, 7, 3, 13, '2024-12-19 03:35:00', 'completed', '\n\n\n\n\n\n\n\n\n\n\nBe ready\nNot\n', '2024-12-01 19:35:23', '2024-12-08 15:13:31', NULL),
+(31, 14, 5, 3, NULL, '2024-12-13 20:15:00', 'cancelled', '', '2024-12-09 10:16:04', '2024-12-09 10:17:11', NULL),
+(32, 11, 9, NULL, 17, '2024-12-30 20:35:00', 'completed', '\n\n', '2024-12-09 12:35:13', '2024-12-11 07:33:59', 1),
+(33, 11, 9, 1, NULL, '2024-12-14 14:30:00', 'pending', '', '2024-12-11 06:31:07', '2024-12-11 06:31:07', NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `appointment_logs`
+--
+
+CREATE TABLE `appointment_logs` (
+  `log_id` int(11) NOT NULL,
+  `appointment_id` int(11) DEFAULT NULL,
+  `status_from` varchar(50) DEFAULT NULL,
+  `status_to` varchar(50) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `appointment_logs`
+--
+
+INSERT INTO `appointment_logs` (`log_id`, `appointment_id`, `status_from`, `status_to`, `notes`, `created_by`, `created_at`) VALUES
+(37, 26, 'pending', 'confirmed', '', 6, '2024-12-01 19:46:24'),
+(38, 26, '', 'confirmed', '', 6, '2024-12-01 19:57:04'),
+(39, 26, '', 'confirmed', '', 6, '2024-12-01 19:57:13'),
+(40, 26, '', 'confirmed', '', 6, '2024-12-01 19:57:21'),
+(41, 26, '', 'confirmed', '', 6, '2024-12-01 20:06:07'),
+(42, 26, '', 'confirmed', '', 6, '2024-12-01 20:06:11'),
+(43, 26, '', 'confirmed', '', 6, '2024-12-05 02:15:31'),
+(44, 26, '', 'completed', '', 6, '2024-12-05 02:15:55'),
+(45, 26, 'completed', 'cancelled', '', 6, '2024-12-05 02:16:14'),
+(46, 26, 'cancelled', 'pending', '', 6, '2024-12-05 02:16:29'),
+(47, 26, 'pending', 'confirmed', 'Be ready', 6, '2024-12-06 15:05:24'),
+(48, 26, '', 'in-progress', 'Not', 6, '2024-12-06 15:06:14'),
+(54, 32, 'pending', 'confirmed', '', 6, '2024-12-09 12:54:35'),
+(55, 32, 'confirmed', 'completed', '', 6, '2024-12-11 07:33:59');
 
 -- --------------------------------------------------------
 
@@ -60,54 +98,6 @@ CREATE TABLE `appointment_status_history` (
   `appointment_id` int(11) NOT NULL,
   `status` varchar(50) NOT NULL,
   `notes` text DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `inventory`
---
-
-CREATE TABLE `inventory` (
-  `item_id` int(11) NOT NULL,
-  `name` varchar(100) NOT NULL,
-  `description` text DEFAULT NULL,
-  `quantity` int(11) NOT NULL,
-  `unit_price` decimal(10,2) NOT NULL,
-  `reorder_level` int(11) NOT NULL,
-  `category` varchar(50) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `loyalty_points`
---
-
-CREATE TABLE `loyalty_points` (
-  `point_id` int(11) NOT NULL,
-  `user_id` int(11) NOT NULL,
-  `points` int(11) NOT NULL,
-  `source` varchar(50) NOT NULL,
-  `description` text DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `loyalty_rewards`
---
-
-CREATE TABLE `loyalty_rewards` (
-  `reward_id` int(11) NOT NULL,
-  `name` varchar(100) NOT NULL,
-  `description` text DEFAULT NULL,
-  `points_required` int(11) NOT NULL,
-  `is_active` tinyint(1) DEFAULT 1,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -141,22 +131,34 @@ CREATE TABLE `notifications` (
   `sent_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- --------------------------------------------------------
-
 --
--- Table structure for table `payments`
+-- Dumping data for table `notifications`
 --
 
-CREATE TABLE `payments` (
-  `payment_id` int(11) NOT NULL,
-  `appointment_id` int(11) NOT NULL,
-  `amount` decimal(10,2) NOT NULL,
-  `payment_date` datetime NOT NULL,
-  `payment_method` enum('cash','credit_card') NOT NULL,
-  `status` enum('paid','unpaid') DEFAULT 'unpaid',
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+INSERT INTO `notifications` (`notification_id`, `user_id`, `appointment_id`, `message`, `type`, `sent_at`) VALUES
+(64, 6, 26, 'New appointment booking #26', '', '2024-12-02 03:35:23'),
+(65, 14, 26, 'Your service appointment for Check Engine has been updated to: confirmed', '', '2024-12-02 03:46:24'),
+(66, 13, 26, 'You have been assigned to appointment #26', '', '2024-12-02 03:46:24'),
+(67, 14, 26, 'Your service appointment for Check Engine has been updated to: confirmed', '', '2024-12-02 03:57:04'),
+(68, 14, 26, 'Your service appointment for Check Engine has been updated to: confirmed', '', '2024-12-02 03:57:13'),
+(69, 14, 26, 'Your service appointment for Check Engine has been updated to: confirmed', '', '2024-12-02 03:57:21'),
+(70, 14, 26, 'Your service appointment for Check Engine has been updated to: confirmed', '', '2024-12-02 04:06:07'),
+(71, 14, 26, 'Your service appointment for Check Engine has been updated to: confirmed', '', '2024-12-02 04:06:11'),
+(72, 14, 26, 'Your service appointment for Check Engine has been updated to: confirmed', '', '2024-12-05 10:15:31'),
+(73, 14, 26, 'Your service appointment for Check Engine has been updated to: completed', '', '2024-12-05 10:15:55'),
+(74, 14, 26, 'Your service appointment for Check Engine has been updated to: cancelled', '', '2024-12-05 10:16:14'),
+(75, 14, 26, 'Your service appointment for Check Engine has been updated to: pending', '', '2024-12-05 10:16:29'),
+(78, 14, 26, 'Your service appointment for Check Engine has been updated to: confirmed', '', '2024-12-06 23:05:24'),
+(79, 14, 26, 'Your service appointment for Check Engine has been updated to: in-progress', '', '2024-12-06 23:06:14'),
+(85, 14, 26, 'Your appointment for Check Engine has been updated to: Completed', '', '2024-12-08 23:13:31'),
+(86, 6, 26, 'Appointment #26 status updated to: Completed', '', '2024-12-08 23:13:31'),
+(94, 6, 31, 'New appointment booking #31', '', '2024-12-09 18:16:04'),
+(95, 14, 31, 'Your appointment has been cancelled by admin', '', '2024-12-09 18:17:11'),
+(98, 6, 32, 'New appointment booking #32', '', '2024-12-09 20:35:13'),
+(99, 11, 32, 'Your service package appointment for Basic Maintenance has been updated to: confirmed', '', '2024-12-09 20:54:35'),
+(100, 17, 32, 'You have been assigned to appointment #32', '', '2024-12-09 20:54:35'),
+(101, 6, 33, 'New appointment booking #33', '', '2024-12-11 14:31:07'),
+(102, 11, 32, 'Your service package appointment for Basic Maintenance has been updated to: completed', '', '2024-12-11 15:33:59');
 
 -- --------------------------------------------------------
 
@@ -193,24 +195,10 @@ CREATE TABLE `services` (
 --
 
 INSERT INTO `services` (`service_id`, `name`, `description`, `price`, `duration_minutes`, `created_at`, `updated_at`) VALUES
-(1, 'Oil Change', 'Ensure your vehicle runs smoothly and efficiently with our comprehensive oil change service. Our technicians replace your old engine oil with premium-grade oil tailored to your car’s needs, along with a new, high-quality oil filter.', 2500.00, 0, '2024-11-28 21:02:02', '2024-11-28 21:02:02'),
-(2, 'Tire Change', 'Drive with confidence and safety with our expert tire change service. Our technicians carefully remove your old or damaged tires and replace them with new, high-quality tires suited to your vehicle and driving needs.', 8000.00, 0, '2024-11-28 21:02:53', '2024-11-28 21:02:53');
-
--- --------------------------------------------------------
-
---
--- Table structure for table `service_analytics`
---
-
-CREATE TABLE `service_analytics` (
-  `analytics_id` int(11) NOT NULL,
-  `service_id` int(11) NOT NULL,
-  `total_appointments` int(11) DEFAULT 0,
-  `completed_appointments` int(11) DEFAULT 0,
-  `total_revenue` decimal(10,2) DEFAULT 0.00,
-  `average_rating` decimal(3,2) DEFAULT 0.00,
-  `month` date NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+(1, 'Oil Change', 'I-change ang oil ng kutse', 20.00, 0, '2024-11-28 21:02:02', '2024-12-11 04:25:29'),
+(2, 'Tire Change', 'I-change ang ligid', 40.00, 0, '2024-11-28 21:02:53', '2024-12-11 04:25:36'),
+(3, 'Check Engine', 'Lantawun ang makina', 30.00, 0, '2024-12-01 16:49:37', '2024-12-11 04:25:43'),
+(4, 'Replace Coolant', 'Coolant ireplace', 50.00, 0, '2024-12-08 07:28:28', '2024-12-11 04:25:54');
 
 -- --------------------------------------------------------
 
@@ -240,21 +228,7 @@ INSERT INTO `service_packages` (`package_id`, `name`, `description`, `price`, `d
 (2, 'Premium Service', 'Comprehensive maintenance including brake check and wheel alignment', 199.99, 120, 'Oil Change,Filter Replacement,Brake Inspection,Wheel Alignment,Fluid Top-up,Battery Check', 10, 1, '2024-11-30 03:17:33', '2024-11-30 03:17:33'),
 (3, 'Complete Care', 'Full vehicle service with detailed inspection and maintenance', 299.99, 180, 'Oil Change,Filter Replacement,Brake Service,Wheel Alignment,Tire Rotation,Battery Service,AC Check,Engine Diagnostic', 15, 1, '2024-11-30 03:17:33', '2024-11-30 03:17:33'),
 (4, 'Quick Service', 'Express oil change and basic check-up', 49.99, 30, 'Oil Change,Basic Inspection,Fluid Check', 0, 1, '2024-11-30 03:17:33', '2024-11-30 03:17:33'),
-(5, 'Seasonal Package', 'Prepare your vehicle for weather changes', 149.99, 90, 'Oil Change,Brake Check,Tire Inspection,Battery Test,Coolant Check', 5, 1, '2024-11-30 03:17:33', '2024-11-30 03:17:33');
-
--- --------------------------------------------------------
-
---
--- Table structure for table `service_ratings`
---
-
-CREATE TABLE `service_ratings` (
-  `rating_id` int(11) NOT NULL,
-  `appointment_id` int(11) NOT NULL,
-  `rating` int(11) NOT NULL CHECK (`rating` between 1 and 5),
-  `review` text DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+(5, 'Seasonal Package', 'onsa?', 149.99, 90, 'Oil Change,Brake Check,Tire Inspection,Battery Test,Coolant Check', 5, 0, '2024-11-30 03:17:33', '2024-12-01 17:17:17');
 
 -- --------------------------------------------------------
 
@@ -311,9 +285,10 @@ CREATE TABLE `users` (
 
 INSERT INTO `users` (`user_id`, `role`, `first_name`, `last_name`, `email`, `password`, `phone_number`, `created_at`, `updated_at`, `loyalty_points`, `notification_preferences`) VALUES
 (6, 'admin', 'Admin', 'User', 'admin@autobots.com', '$2y$10$cpPoWtHFLBJY6QolJg5UFuJ20s.SkgP2PrG0B0uqI/ifTjY/Ec6Ja', '1234567890', '2024-11-28 20:12:35', '2024-11-28 20:36:04', 0, NULL),
-(10, 'customer', 'shane', 'user', 'shane@example.com', '$2y$10$YHUDV4x11/bPuTE9uoQWsOskjp4kBmPs/eD0eQIv/Vy1m6v/phGLO', '0946892840', '2024-11-28 20:43:31', '2024-11-28 20:43:31', 0, NULL),
 (11, 'customer', 'jm', 'user', 'jm@example.com', '$2y$10$Ndq8RSlufuizYxtN7u8MbeqTkSWc7W6EjmHROcy5deNFviSQxdQsi', '09534234891', '2024-11-28 20:45:28', '2024-11-28 20:45:28', 0, NULL),
-(13, 'technician', 'Tech', 'Expert', 'tech@autobots.com', '$2y$10$rQCZrNyq3tX.zLqfPTMkUezjviwm9ePj0o0N.OcQECkK2CyfxnZHe', '0987654321', '2024-11-28 20:47:51', '2024-11-28 20:47:51', 0, NULL);
+(13, 'technician', 'Tech', 'Expert', 'tech@autobots.com', '$2y$10$rQCZrNyq3tX.zLqfPTMkUezjviwm9ePj0o0N.OcQECkK2CyfxnZHe', '0987654321', '2024-11-28 20:47:51', '2024-11-28 20:47:51', 0, NULL),
+(14, 'customer', 'wen', 'wen', 'wen@example.com', '$2y$10$q4CEklILyGjrdxY5oWYT/uEk5IUa1.lYsc3xM8aAmlhneyl3tecLu', '09451992710', '2024-11-30 14:51:49', '2024-11-30 14:51:49', 0, NULL),
+(17, 'technician', 'Techy', 'Savyy', 'techy@autobots.com', '$2y$10$eWQ6Go4ARrFyW1SsMEbhfOwkzlNiL.toPj/NbmnuZYFrf8enriaCS', '09343258492', '2024-12-09 12:54:20', '2024-12-09 12:59:18', 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -340,22 +315,11 @@ CREATE TABLE `vehicles` (
 --
 
 INSERT INTO `vehicles` (`vehicle_id`, `user_id`, `make`, `model`, `year`, `license_plate`, `photo_url`, `created_at`, `updated_at`, `mileage`, `last_service_date`) VALUES
-(1, 11, 'Koenigsegg', 'Jesko', '2024', 'LVH 123', NULL, '2024-11-28 20:58:55', '2024-11-28 20:58:55', NULL, NULL),
-(2, 11, 'Lamborghini', 'Diablo', '2016', 'SMH 143', NULL, '2024-11-28 21:08:57', '2024-11-28 21:08:57', NULL, NULL);
-
--- --------------------------------------------------------
-
---
--- Table structure for table `vehicle_documents`
---
-
-CREATE TABLE `vehicle_documents` (
-  `document_id` int(11) NOT NULL,
-  `vehicle_id` int(11) DEFAULT NULL,
-  `document_type` varchar(50) DEFAULT NULL,
-  `file_path` varchar(255) DEFAULT NULL,
-  `expiry_date` date DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+(5, 14, 'BMW', 'M3', '2020', 'JVT 201', NULL, '2024-11-30 14:52:48', '2024-12-06 14:49:05', NULL, NULL),
+(6, 11, 'Bugatti', 'Veyron', '1999', 'BEN 100', NULL, '2024-12-01 19:06:07', '2024-12-07 16:17:30', NULL, NULL),
+(7, 14, 'Pagani', 'Zonda', '2016', 'TGL 153', NULL, '2024-12-01 19:34:56', '2024-12-06 15:45:19', NULL, NULL),
+(8, 11, 'Mclaren', 'P1', '2016', 'PDO 120', NULL, '2024-12-05 02:18:01', '2024-12-05 02:18:01', NULL, NULL),
+(9, 11, 'Lamborghini', 'Aventador', '2022', 'LRT 323', NULL, '2024-12-09 12:27:36', '2024-12-09 12:27:36', NULL, NULL);
 
 --
 -- Indexes for dumped tables
@@ -369,7 +333,18 @@ ALTER TABLE `appointments`
   ADD KEY `user_id` (`user_id`),
   ADD KEY `vehicle_id` (`vehicle_id`),
   ADD KEY `service_id` (`service_id`),
-  ADD KEY `technician_id` (`technician_id`);
+  ADD KEY `technician_id` (`technician_id`),
+  ADD KEY `idx_status` (`status`),
+  ADD KEY `idx_appointment_date` (`appointment_date`),
+  ADD KEY `fk_package` (`package_id`);
+
+--
+-- Indexes for table `appointment_logs`
+--
+ALTER TABLE `appointment_logs`
+  ADD PRIMARY KEY (`log_id`),
+  ADD KEY `created_by` (`created_by`),
+  ADD KEY `idx_appointment_id` (`appointment_id`);
 
 --
 -- Indexes for table `appointment_status_history`
@@ -377,25 +352,6 @@ ALTER TABLE `appointments`
 ALTER TABLE `appointment_status_history`
   ADD PRIMARY KEY (`history_id`),
   ADD KEY `appointment_id` (`appointment_id`);
-
---
--- Indexes for table `inventory`
---
-ALTER TABLE `inventory`
-  ADD PRIMARY KEY (`item_id`);
-
---
--- Indexes for table `loyalty_points`
---
-ALTER TABLE `loyalty_points`
-  ADD PRIMARY KEY (`point_id`),
-  ADD KEY `user_id` (`user_id`);
-
---
--- Indexes for table `loyalty_rewards`
---
-ALTER TABLE `loyalty_rewards`
-  ADD PRIMARY KEY (`reward_id`);
 
 --
 -- Indexes for table `maintenance_reminders`
@@ -413,13 +369,6 @@ ALTER TABLE `notifications`
   ADD KEY `appointment_id` (`appointment_id`);
 
 --
--- Indexes for table `payments`
---
-ALTER TABLE `payments`
-  ADD PRIMARY KEY (`payment_id`),
-  ADD KEY `appointment_id` (`appointment_id`);
-
---
 -- Indexes for table `reviews`
 --
 ALTER TABLE `reviews`
@@ -433,24 +382,10 @@ ALTER TABLE `services`
   ADD PRIMARY KEY (`service_id`);
 
 --
--- Indexes for table `service_analytics`
---
-ALTER TABLE `service_analytics`
-  ADD PRIMARY KEY (`analytics_id`),
-  ADD KEY `service_id` (`service_id`);
-
---
 -- Indexes for table `service_packages`
 --
 ALTER TABLE `service_packages`
   ADD PRIMARY KEY (`package_id`);
-
---
--- Indexes for table `service_ratings`
---
-ALTER TABLE `service_ratings`
-  ADD PRIMARY KEY (`rating_id`),
-  ADD KEY `appointment_id` (`appointment_id`);
 
 --
 -- Indexes for table `service_reminders`
@@ -481,13 +416,6 @@ ALTER TABLE `vehicles`
   ADD KEY `user_id` (`user_id`);
 
 --
--- Indexes for table `vehicle_documents`
---
-ALTER TABLE `vehicle_documents`
-  ADD PRIMARY KEY (`document_id`),
-  ADD KEY `vehicle_id` (`vehicle_id`);
-
---
 -- AUTO_INCREMENT for dumped tables
 --
 
@@ -495,31 +423,19 @@ ALTER TABLE `vehicle_documents`
 -- AUTO_INCREMENT for table `appointments`
 --
 ALTER TABLE `appointments`
-  MODIFY `appointment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `appointment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=34;
+
+--
+-- AUTO_INCREMENT for table `appointment_logs`
+--
+ALTER TABLE `appointment_logs`
+  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=56;
 
 --
 -- AUTO_INCREMENT for table `appointment_status_history`
 --
 ALTER TABLE `appointment_status_history`
   MODIFY `history_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `inventory`
---
-ALTER TABLE `inventory`
-  MODIFY `item_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `loyalty_points`
---
-ALTER TABLE `loyalty_points`
-  MODIFY `point_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `loyalty_rewards`
---
-ALTER TABLE `loyalty_rewards`
-  MODIFY `reward_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `maintenance_reminders`
@@ -531,13 +447,7 @@ ALTER TABLE `maintenance_reminders`
 -- AUTO_INCREMENT for table `notifications`
 --
 ALTER TABLE `notifications`
-  MODIFY `notification_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `payments`
---
-ALTER TABLE `payments`
-  MODIFY `payment_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `notification_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=103;
 
 --
 -- AUTO_INCREMENT for table `reviews`
@@ -549,25 +459,13 @@ ALTER TABLE `reviews`
 -- AUTO_INCREMENT for table `services`
 --
 ALTER TABLE `services`
-  MODIFY `service_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
-
---
--- AUTO_INCREMENT for table `service_analytics`
---
-ALTER TABLE `service_analytics`
-  MODIFY `analytics_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `service_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `service_packages`
 --
 ALTER TABLE `service_packages`
   MODIFY `package_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
-
---
--- AUTO_INCREMENT for table `service_ratings`
---
-ALTER TABLE `service_ratings`
-  MODIFY `rating_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `service_reminders`
@@ -585,19 +483,13 @@ ALTER TABLE `technician_schedules`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
 
 --
 -- AUTO_INCREMENT for table `vehicles`
 --
 ALTER TABLE `vehicles`
-  MODIFY `vehicle_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
-
---
--- AUTO_INCREMENT for table `vehicle_documents`
---
-ALTER TABLE `vehicle_documents`
-  MODIFY `document_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `vehicle_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- Constraints for dumped tables
@@ -610,19 +502,22 @@ ALTER TABLE `appointments`
   ADD CONSTRAINT `appointments_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
   ADD CONSTRAINT `appointments_ibfk_2` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`vehicle_id`) ON DELETE CASCADE,
   ADD CONSTRAINT `appointments_ibfk_3` FOREIGN KEY (`service_id`) REFERENCES `services` (`service_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `appointments_ibfk_4` FOREIGN KEY (`technician_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL;
+  ADD CONSTRAINT `appointments_ibfk_4` FOREIGN KEY (`technician_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_appointments_packages` FOREIGN KEY (`package_id`) REFERENCES `service_packages` (`package_id`),
+  ADD CONSTRAINT `fk_package` FOREIGN KEY (`package_id`) REFERENCES `service_packages` (`package_id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `appointment_logs`
+--
+ALTER TABLE `appointment_logs`
+  ADD CONSTRAINT `appointment_logs_ibfk_1` FOREIGN KEY (`appointment_id`) REFERENCES `appointments` (`appointment_id`),
+  ADD CONSTRAINT `appointment_logs_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`);
 
 --
 -- Constraints for table `appointment_status_history`
 --
 ALTER TABLE `appointment_status_history`
   ADD CONSTRAINT `appointment_status_history_ibfk_1` FOREIGN KEY (`appointment_id`) REFERENCES `appointments` (`appointment_id`);
-
---
--- Constraints for table `loyalty_points`
---
-ALTER TABLE `loyalty_points`
-  ADD CONSTRAINT `loyalty_points_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`);
 
 --
 -- Constraints for table `maintenance_reminders`
@@ -638,28 +533,10 @@ ALTER TABLE `notifications`
   ADD CONSTRAINT `notifications_ibfk_2` FOREIGN KEY (`appointment_id`) REFERENCES `appointments` (`appointment_id`) ON DELETE CASCADE;
 
 --
--- Constraints for table `payments`
---
-ALTER TABLE `payments`
-  ADD CONSTRAINT `payments_ibfk_1` FOREIGN KEY (`appointment_id`) REFERENCES `appointments` (`appointment_id`) ON DELETE CASCADE;
-
---
 -- Constraints for table `reviews`
 --
 ALTER TABLE `reviews`
   ADD CONSTRAINT `reviews_ibfk_1` FOREIGN KEY (`appointment_id`) REFERENCES `appointments` (`appointment_id`);
-
---
--- Constraints for table `service_analytics`
---
-ALTER TABLE `service_analytics`
-  ADD CONSTRAINT `service_analytics_ibfk_1` FOREIGN KEY (`service_id`) REFERENCES `services` (`service_id`) ON DELETE CASCADE;
-
---
--- Constraints for table `service_ratings`
---
-ALTER TABLE `service_ratings`
-  ADD CONSTRAINT `service_ratings_ibfk_1` FOREIGN KEY (`appointment_id`) REFERENCES `appointments` (`appointment_id`);
 
 --
 -- Constraints for table `service_reminders`
@@ -678,12 +555,6 @@ ALTER TABLE `technician_schedules`
 --
 ALTER TABLE `vehicles`
   ADD CONSTRAINT `vehicles_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
-
---
--- Constraints for table `vehicle_documents`
---
-ALTER TABLE `vehicle_documents`
-  ADD CONSTRAINT `vehicle_documents_ibfk_1` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`vehicle_id`);
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
